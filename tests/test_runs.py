@@ -1,84 +1,240 @@
 import uuid
+
+import asyncpg
+import orjson
 import pytest
+import pytest_asyncio
+from botocore.exceptions import ClientError
 from httpx import AsyncClient
 
+from ls_py_handler.config.settings import settings
 from ls_py_handler.main import app
-from ls_py_handler.api.routes.runs import Run
+from ls_py_handler.resources import get_db_conn, get_s3_client
+
+
+@pytest_asyncio.fixture
+async def client():
+    async with app.router.lifespan_context(app):
+        async with AsyncClient(app=app, base_url="http://test") as test_client:
+            yield test_client
+
+
+def run_payload(**overrides):
+    payload = {
+        "id": str(uuid.uuid4()),
+        "trace_id": str(uuid.uuid4()),
+        "name": "Test Run",
+        "inputs": {"prompt": "What is the capital of France?"},
+        "outputs": {"answer": "Paris"},
+        "metadata": {"model": "gpt-4", "temperature": 0.7},
+    }
+    payload.update(overrides)
+    return payload
 
 
 @pytest.mark.asyncio
-async def test_create_and_get_run():
-    """
-    Test the POST /runs endpoint to create multiple runs
-    and the GET /runs/{run_id} endpoint to retrieve them.
-    """
-    # Create test data for multiple runs
-    run1 = Run(
-        trace_id=uuid.uuid4(),
-        name="Test Run 1",
-        inputs={"prompt": "What is the capital of France?"},
-        outputs={"answer": "Paris"},
-        metadata={"model": "gpt-4", "temperature": 0.7},
+async def test_create_and_get_runs_preserves_exact_payload(client):
+    shared = {"value": "same value", "nested": {"emoji": "こんにちは 🌍"}}
+    runs = [
+        run_payload(name="First", inputs=shared, outputs=shared, metadata=shared),
+        run_payload(name="Second", inputs=shared, outputs=shared, metadata=shared),
+        run_payload(
+            name="Escapes",
+            inputs={"text": 'line one\nline two\\path"quoted"'},
+            outputs={"number": 42, "enabled": True},
+            metadata={"none": None},
+        ),
+    ]
+
+    response = await client.post("/runs", json=runs)
+
+    assert response.status_code == 201
+    assert response.json() == {
+        "status": "created",
+        "run_ids": [run["id"] for run in runs],
+    }
+    assert response.headers["X-Request-ID"]
+
+    for expected in runs:
+        get_response = await client.get(f"/runs/{expected['id']}")
+        assert get_response.status_code == 200
+        assert get_response.json() == expected
+
+
+@pytest.mark.asyncio
+async def test_create_rejects_empty_batch(client):
+    response = await client.post("/runs", json=[])
+
+    assert response.status_code == 400
+    assert response.json() == {"detail": "No runs provided"}
+
+
+@pytest.mark.asyncio
+async def test_create_rejects_too_many_runs(client, monkeypatch):
+    monkeypatch.setattr(settings, "MAX_BATCH_RUNS", 1)
+
+    response = await client.post("/runs", json=[run_payload(), run_payload()])
+
+    assert response.status_code == 413
+
+
+@pytest.mark.asyncio
+async def test_create_rejects_oversized_request_before_parsing(client, monkeypatch):
+    monkeypatch.setattr(settings, "MAX_REQUEST_BYTES", 1)
+
+    response = await client.post("/runs", json=[run_payload()])
+
+    assert response.status_code == 413
+    assert response.json() == {"detail": "Request body exceeds the configured limit"}
+
+
+@pytest.mark.asyncio
+async def test_object_storage_failure_returns_503_without_database_row(client):
+    payload = run_payload()
+
+    class FailingS3:
+        async def put_object(self, **_kwargs):
+            raise ClientError(
+                {"Error": {"Code": "ServiceUnavailable", "Message": "injected"}},
+                "PutObject",
+            )
+
+    app.dependency_overrides[get_s3_client] = lambda: FailingS3()
+    try:
+        response = await client.post("/runs", json=[payload])
+    finally:
+        app.dependency_overrides.pop(get_s3_client, None)
+
+    assert response.status_code == 503
+    assert (await client.get(f"/runs/{payload['id']}")).status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_database_failure_removes_uploaded_object(client):
+    class FailingTransaction:
+        async def __aenter__(self):
+            return None
+
+        async def __aexit__(self, _exc_type, _exc, _traceback):
+            return False
+
+    class FailingConnection:
+        def transaction(self):
+            return FailingTransaction()
+
+        async def copy_records_to_table(self, *_args, **_kwargs):
+            raise asyncpg.PostgresError("injected")
+
+    async def failing_db():
+        yield FailingConnection()
+
+    resources = app.state.resources
+    before = await resources.s3.list_objects_v2(Bucket=settings.S3_BUCKET_NAME)
+    app.dependency_overrides[get_db_conn] = failing_db
+    try:
+        response = await client.post("/runs", json=[run_payload()])
+    finally:
+        app.dependency_overrides.pop(get_db_conn, None)
+    after = await resources.s3.list_objects_v2(Bucket=settings.S3_BUCKET_NAME)
+
+    assert response.status_code == 503
+    assert after.get("KeyCount", 0) == before.get("KeyCount", 0)
+
+
+@pytest.mark.asyncio
+async def test_duplicate_id_is_atomic_and_uploaded_object_is_removed(client):
+    existing = run_payload()
+    assert (await client.post("/runs", json=[existing])).status_code == 201
+
+    resources = app.state.resources
+    before = await resources.s3.list_objects_v2(Bucket=settings.S3_BUCKET_NAME)
+    fresh = run_payload()
+    response = await client.post("/runs", json=[fresh, existing])
+    after = await resources.s3.list_objects_v2(Bucket=settings.S3_BUCKET_NAME)
+
+    assert response.status_code == 409
+    assert response.json() == {"detail": "One or more run IDs already exist"}
+    assert (await client.get(f"/runs/{fresh['id']}")).status_code == 404
+    assert (await client.get(f"/runs/{existing['id']}")).status_code == 200
+    assert after.get("KeyCount", 0) == before.get("KeyCount", 0)
+
+
+@pytest.mark.asyncio
+async def test_missing_object_is_reported_as_integrity_error(client):
+    payload = run_payload()
+    assert (await client.post("/runs", json=[payload])).status_code == 201
+
+    resources = app.state.resources
+    async with resources.db_pool.acquire() as connection:
+        object_key = await connection.fetchval(
+            "SELECT object_key FROM runs WHERE id = $1", uuid.UUID(payload["id"])
+        )
+    await resources.s3.delete_object(Bucket=settings.S3_BUCKET_NAME, Key=object_key)
+
+    response = await client.get(f"/runs/{payload['id']}")
+
+    assert response.status_code == 500
+    assert response.json() == {"detail": "Stored run data is unavailable"}
+
+
+@pytest.mark.asyncio
+async def test_legacy_version_one_row_remains_readable(client):
+    payload = run_payload(name="Legacy")
+    fields = [payload["inputs"], payload["outputs"], payload["metadata"]]
+    encoded_fields = [orjson.dumps(field) for field in fields]
+    body = b"".join(encoded_fields)
+    key = f"legacy/{payload['id']}.json"
+
+    resources = app.state.resources
+    await resources.s3.put_object(
+        Bucket=settings.S3_BUCKET_NAME,
+        Key=key,
+        Body=body,
+        ContentLength=len(body),
     )
+    starts = [
+        0,
+        len(encoded_fields[0]),
+        len(encoded_fields[0]) + len(encoded_fields[1]),
+    ]
+    references = [
+        f"s3://{settings.S3_BUCKET_NAME}/{key}#{start}:{start + len(value)}/{field}"
+        for start, value, field in zip(
+            starts, encoded_fields, ("inputs", "outputs", "metadata"), strict=True
+        )
+    ]
+    async with resources.db_pool.acquire() as connection:
+        await connection.execute(
+            """
+            INSERT INTO runs (id, trace_id, name, inputs, outputs, metadata)
+            VALUES ($1, $2, $3, $4, $5, $6)
+            """,
+            uuid.UUID(payload["id"]),
+            uuid.UUID(payload["trace_id"]),
+            payload["name"],
+            *references,
+        )
 
-    run2 = Run(
-        trace_id=uuid.uuid4(),
-        name="Test Run 2",
-        inputs={"prompt": "Tell me about machine learning"},
-        outputs={"answer": "Machine learning is a branch of AI..."},
-        metadata={"model": "gpt-3.5-turbo", "temperature": 0.5},
-    )
+    response = await client.get(f"/runs/{payload['id']}")
 
-    run3 = Run(
-        trace_id=uuid.uuid4(),
-        name="Test Run 3",
-        inputs={"prompt": "Python code example"},
-        outputs={"code": "print('Hello, World!')"},
-        metadata={"model": "codex", "temperature": 0.2},
-    )
+    assert response.status_code == 200
+    assert response.json() == payload
 
-    # Create a list of runs to send in a batch
-    runs = [run1, run2, run3]
 
-    # Convert Run objects to dictionaries with string UUIDs
-    run_dicts = []
-    for run in runs:
-        run_dict = run.model_dump()
-        # Convert UUID objects to strings
-        run_dict["id"] = str(run_dict["id"])
-        run_dict["trace_id"] = str(run_dict["trace_id"])
-        run_dicts.append(run_dict)
+@pytest.mark.asyncio
+async def test_get_unknown_run_returns_404(client):
+    run_id = uuid.uuid4()
 
-    async with AsyncClient(app=app, base_url="http://test") as client:
-        # Create the runs
-        response = await client.post("/runs", json=run_dicts)
+    response = await client.get(f"/runs/{run_id}")
 
-        # Check response status and structure
-        assert response.status_code == 201
-        assert "status" in response.json()
-        assert response.json()["status"] == "created"
-        assert "run_ids" in response.json()
+    assert response.status_code == 404
 
-        # Get the returned run IDs
-        run_ids = response.json()["run_ids"]
-        assert len(run_ids) == 3
 
-        # Verify we can retrieve each run individually
-        for i, run_id in enumerate(run_ids):
-            get_response = await client.get(f"/runs/{run_id}")
+@pytest.mark.asyncio
+async def test_health_endpoints(client):
+    assert (await client.get("/health/live")).json() == {"status": "alive"}
 
-            # Check response status
-            assert get_response.status_code == 200
+    response = await client.get("/health/ready")
 
-            # Verify the run data matches what we sent
-            run_data = get_response.json()
-            assert run_data["id"] == run_id
-
-            # Verify run name matches the original
-            expected_name = runs[i].name
-            assert run_data["name"] == expected_name
-
-            # Verify inputs, outputs, and metadata match
-            assert run_data["inputs"] == runs[i].inputs
-            assert run_data["outputs"] == runs[i].outputs
-            assert run_data["metadata"] == runs[i].metadata
+    assert response.status_code == 200
+    assert response.json() == {"status": "ready"}

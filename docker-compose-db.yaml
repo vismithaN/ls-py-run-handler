@@ -9,8 +9,18 @@ services:
       - '5432:5432'
     volumes:
       - ./.data/postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 2s
+      timeout: 2s
+      retries: 15
   minio:
-    image: minio/minio
+    build:
+      context: .
+      dockerfile: Dockerfile.minio
+    image: ls-py-run-handler/minio:RELEASE.2025-10-15T17-29-55Z
+    # The Docker-managed development volume is initialized as root-owned.
+    user: "0"
     command: server /data --address :9000 --console-address :9001
     ports:
       - "9002:9000"
@@ -19,5 +29,13 @@ services:
       MINIO_ROOT_USER: minioadmin1
       MINIO_ROOT_PASSWORD: minioadmin1
     volumes:
-      - ./.data/minio:/data
+      - minio-data:/data
     restart: always
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:9000/minio/health/live"]
+      interval: 2s
+      timeout: 2s
+      retries: 15
+
+volumes:
+  minio-data:

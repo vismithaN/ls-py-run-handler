@@ -1,11 +1,20 @@
-# ls-py-handler
+# ls-py-run-handler
 
-A simple FastAPI server with endpoints for ingesting and fetching runs.
+A production-oriented FastAPI service for ingesting and fetching runs, backed by
+PostgreSQL and S3-compatible object storage.
 
 ## Features
 
 - `POST /runs` endpoint to create new runs
 - `GET /runs/{id}` endpoint to retrieve run information by UUID
+- One-pass, versioned NDJSON batch encoding with exact byte ranges
+- One S3 upload and one PostgreSQL binary bulk copy per batch
+- One database lookup and one S3 range request per version-2 read
+- Lifespan-scoped connection pools, bounded requests, structured timing logs, and
+  health checks
+
+The implementation rationale, benchmark method, and measured before/after results
+are in [OPTIMIZATIONS.md](OPTIMIZATIONS.md).
 
 ## Quick Start
 
@@ -44,7 +53,8 @@ curl -X POST http://localhost:8000/runs \
 Response:
 ```json
 {
-  "ids": ["<generated-uuid>"]
+  "status": "created",
+  "run_ids": ["<generated-uuid>"]
 }
 ```
 
@@ -127,6 +137,8 @@ make lint-fix
 Once the server is running, you can access the auto-generated API documentation at:
 - Swagger UI: http://localhost:8000/docs
 - ReDoc: http://localhost:8000/redoc
+- Liveness: http://localhost:8000/health/live
+- Readiness: http://localhost:8000/health/ready
 
 ## Testing
 
@@ -163,6 +175,9 @@ The application uses environment-specific configuration:
 - Testing: Uses the `.env.test` file when `RUN_HANDLER_ENV=test` is set
 
 This allows tests to run with isolated resources without affecting your development environment.
+
+The reset script contains an additional guard and refuses to operate unless the
+configured resources are exactly `postgres_test` and `runs-test`.
 
 ## Benchmarking and Profiling
 

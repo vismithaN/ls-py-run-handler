@@ -23,6 +23,10 @@ class Settings(BaseSettings):
     DB_USER: str = "postgres"
     DB_PASSWORD: str = "postgres"
     DB_NAME: str = "postgres"
+    DB_POOL_MIN_SIZE: int = 2
+    DB_POOL_MAX_SIZE: int = 20
+    DB_POOL_ACQUIRE_TIMEOUT_SECONDS: float = 5.0
+    DB_COMMAND_TIMEOUT_SECONDS: float = 30.0
 
     # S3/MinIO settings
     S3_BUCKET_NAME: str = "runs"
@@ -30,6 +34,16 @@ class Settings(BaseSettings):
     S3_ACCESS_KEY: str = "minioadmin1"
     S3_SECRET_KEY: str = "minioadmin1"
     S3_REGION: str = "us-east-1"
+    S3_CONNECT_TIMEOUT_SECONDS: float = 3.0
+    S3_READ_TIMEOUT_SECONDS: float = 30.0
+    S3_MAX_CONNECTIONS: int = 50
+    S3_MAX_ATTEMPTS: int = 3
+
+    # Request limits. Content length is checked before parsing when available,
+    # and the encoded size is checked again before any external writes.
+    MAX_REQUEST_BYTES: int = 64 * 1024 * 1024
+    MAX_BATCH_BYTES: int = 64 * 1024 * 1024
+    MAX_BATCH_RUNS: int = 1_000
 
     # Configure pydantic to read from .env file
     model_config = SettingsConfigDict(
