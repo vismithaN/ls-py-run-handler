@@ -192,7 +192,7 @@ async def test_missing_storage_object():
             await s3.delete_object(Bucket=settings.S3_BUCKET_NAME, Key=key)
 
             response = await client.get(f"/runs/{run['id']}")
-            # Keep this baseline defect visible; do not change application code.
-            assert response.status_code >= 400, response.text
+            assert response.status_code == 503, response.text
+            assert response.json() == {"detail": "Stored run data is unavailable"}
     finally:
         await db.close()

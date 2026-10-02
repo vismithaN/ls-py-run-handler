@@ -179,18 +179,13 @@ async def get_run(
             response = await s3.get_object(Bucket=bucket, Key=key, Range=byte_range)
             async with response["Body"] as stream:
                 data = await stream.read()
-            try:
-                # The data should be a valid JSON object corresponding to the field
-                # (inputs, outputs, or metadata) without needing further extraction
-                return orjson.loads(data)
-            except Exception as parse_error:
-                print(f"Error parsing JSON fragment: {parse_error}")
-                print(f"Problematic data: {data}")
-                return {}
+            return orjson.loads(data)
 
         except Exception as e:
-            print(f"Error fetching S3 object with range: {e}")
-            return {}
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="Stored run data is unavailable",
+            ) from e
 
     inputs, outputs, metadata = await asyncio.gather(
         fetch_from_s3(run_data["inputs"]),
