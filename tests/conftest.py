@@ -81,7 +81,7 @@ def isolated_storage():
         migration_env = dict(os.environ, DB_NAME=database, RUN_HANDLER_ENV="test")
         subprocess.run(
             [sys.executable, "-m", "alembic", "upgrade", "head"],
-            cwd=Path(__file__).resolve().parents[2],
+            cwd=Path(__file__).resolve().parents[1],
             env=migration_env,
             check=True,
             timeout=30,
@@ -107,18 +107,12 @@ def isolated_storage():
 
 @pytest_asyncio.fixture
 async def client(isolated_storage):
-    original_overrides = app.dependency_overrides.copy()
-    try:
-        async with app.router.lifespan_context(app):
-            async with AsyncClient(
-                transport=ASGITransport(app=app, raise_app_exceptions=False),
-                base_url="http://test",
-                timeout=30,
-            ) as http:
-                yield http
-    finally:
-        app.dependency_overrides.clear()
-        app.dependency_overrides.update(original_overrides)
+    async with app.router.lifespan_context(app):
+        async with AsyncClient(
+            transport=ASGITransport(app=app, raise_app_exceptions=False),
+            base_url="http://test",
+        ) as http:
+            yield http
 
 
 @pytest_asyncio.fixture
@@ -141,31 +135,3 @@ async def db(isolated_storage):
 async def s3(isolated_storage):
     async with s3_client() as client:
         yield client
-
-
-@pytest.fixture
-def make_run():
-    # Deterministic payloads/UUIDs per case; tests use distinct UUID namespaces.
-    def factory(case, index=0, **overrides):
-        run = {
-            "id": str(
-                uuid.UUID(
-                    bytes=uuid.uuid5(uuid.NAMESPACE_URL, f"{case}/{index}").bytes,
-                    version=4,
-                )
-            ),
-            "trace_id": str(
-                uuid.UUID(
-                    bytes=uuid.uuid5(uuid.NAMESPACE_URL, f"trace/{case}/{index}").bytes,
-                    version=4,
-                )
-            ),
-            "name": f"{case}/{index}",
-            "inputs": {"prompt": f"input-{index}"},
-            "outputs": {"answer": f"output-{index}"},
-            "metadata": {"index": index},
-        }
-        run.update(overrides)
-        return run
-
-    return factory
