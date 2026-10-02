@@ -1,9 +1,13 @@
 import uuid
 
+import asyncpg
 import pytest
+from aiobotocore.session import get_session
+from httpx import AsyncClient
 
 from ls_py_handler.api.routes.runs import Run
 from ls_py_handler.config.settings import settings
+from ls_py_handler.main import app
 
 pytestmark = pytest.mark.asyncio
 
@@ -33,7 +37,7 @@ async def assert_roundtrip(client, runs):
     return ids
 
 
-async def test_create_and_get_run(client):
+async def test_create_and_get_run():
     """Existing batch test, strengthened to compare IDs and trace IDs too."""
     runs = [
         make_run(
@@ -55,29 +59,32 @@ async def test_create_and_get_run(client):
             metadata={"model": "codex", "temperature": 0.2},
         ),
     ]
-    await assert_roundtrip(client, runs)
+    async with AsyncClient(app=app, base_url="http://test") as client:
+        await assert_roundtrip(client, runs)
 
 
-async def test_generated_ids(client):
+async def test_generated_ids():
     runs = [
         make_run("First", inputs={"value": 1}),
         make_run("Second", inputs={"value": 2}),
     ]
     for run in runs:
         del run["id"]
-    await assert_roundtrip(client, runs)
+    async with AsyncClient(app=app, base_url="http://test") as client:
+        await assert_roundtrip(client, runs)
 
 
-async def test_large_payload(client):
+async def test_large_payload():
     run = make_run(
         inputs={"text": "i" * (100 * 1024)},
         outputs={"text": "o" * (100 * 1024)},
         metadata={"text": "m" * (100 * 1024)},
     )
-    await assert_roundtrip(client, [run])
+    async with AsyncClient(app=app, base_url="http://test") as client:
+        await assert_roundtrip(client, [run])
 
 
-async def test_nested_json_and_special_characters(client):
+async def test_nested_json_and_special_characters():
     run = make_run(
         inputs={
             "nested": {"items": [None, True, False, 0, -7, 1.25, "", {"deep": []}]}
@@ -85,62 +92,107 @@ async def test_nested_json_and_special_characters(client):
         outputs={"text": '🌍 தமிழ் 中文 café "quotes" \\path\nnext\tcolumn'},
         metadata={"tags": ["one", "two"], "details": {"enabled": True}},
     )
-    await assert_roundtrip(client, [run])
+    async with AsyncClient(app=app, base_url="http://test") as client:
+        await assert_roundtrip(client, [run])
 
 
-async def test_empty_and_omitted_fields(client):
+async def test_empty_and_omitted_fields():
     explicit = make_run("Empty", inputs={}, outputs={}, metadata={})
     omitted = make_run("Omitted")
     for field in ("inputs", "outputs", "metadata"):
         del omitted[field]
-    await assert_roundtrip(client, [explicit, omitted])
+    async with AsyncClient(app=app, base_url="http://test") as client:
+        await assert_roundtrip(client, [explicit, omitted])
 
 
-async def test_repeated_field_content(client):
+async def test_repeated_field_content():
     shared = {"same": [1, "repeat", {"empty": {}}]}
     runs = [
         make_run("Nested", inputs={"wrapper": shared}, outputs=shared, metadata={}),
         make_run("Repeated", inputs=shared, outputs=shared, metadata=shared),
     ]
-    await assert_roundtrip(client, runs)
+    async with AsyncClient(app=app, base_url="http://test") as client:
+        await assert_roundtrip(client, runs)
 
 
-async def test_invalid_requests_and_missing_runs(client, db, s3):
-    before_rows = await db.fetchval("SELECT count(*) FROM runs")
-    # This isolated suite creates fewer than 1,000 objects; one listing suffices.
-    before_objects = await s3.list_objects_v2(Bucket=settings.S3_BUCKET_NAME)
-
-    response = await client.post("/runs", json=[])
-    assert response.status_code == 400
-
-    invalid = make_run("Missing trace")
-    del invalid["trace_id"]
-    response = await client.post("/runs", json=[make_run("Valid"), invalid])
-    assert response.status_code == 422
-
-    assert await db.fetchval("SELECT count(*) FROM runs") == before_rows
-    after_objects = await s3.list_objects_v2(Bucket=settings.S3_BUCKET_NAME)
-    assert {item["Key"] for item in after_objects.get("Contents", [])} == {
-        item["Key"] for item in before_objects.get("Contents", [])
-    }
-
-    response = await client.get("/runs/not-a-uuid")
-    assert response.status_code == 422
-    response = await client.get(f"/runs/{uuid.uuid4()}")
-    assert response.status_code == 404
-
-
-async def test_missing_storage_object(client, db, s3):
-    run = make_run(inputs={"prompt": "hello"}, outputs={"answer": "world"})
-    await assert_roundtrip(client, [run])
-    reference = await db.fetchval(
-        "SELECT inputs FROM runs WHERE id = $1", uuid.UUID(run["id"])
+async def test_invalid_requests_and_missing_runs():
+    db = await asyncpg.connect(
+        host=settings.DB_HOST,
+        port=settings.DB_PORT,
+        user=settings.DB_USER,
+        password=settings.DB_PASSWORD,
+        database=settings.DB_NAME,
+        timeout=5,
     )
-    # Reference format: s3://bucket/object-key#start:end/field
-    key = reference.split("#", 1)[0].split("/", 3)[3]
-    await s3.delete_object(Bucket=settings.S3_BUCKET_NAME, Key=key)
+    try:
+        async with get_session().create_client(
+            "s3",
+            endpoint_url=settings.S3_ENDPOINT_URL,
+            aws_access_key_id=settings.S3_ACCESS_KEY,
+            aws_secret_access_key=settings.S3_SECRET_KEY,
+            region_name=settings.S3_REGION,
+        ) as s3, AsyncClient(app=app, base_url="http://test") as client:
+            before_rows = await db.fetchval("SELECT count(*) FROM runs")
+            before_keys = set()
+            async for page in s3.get_paginator("list_objects_v2").paginate(
+                Bucket=settings.S3_BUCKET_NAME
+            ):
+                before_keys.update(item["Key"] for item in page.get("Contents", []))
 
-    response = await client.get(f"/runs/{run['id']}")
-    # The baseline may fail: storage errors currently become empty fields + 200.
-    # Keep the failure visible rather than changing application code here.
-    assert response.status_code >= 400, response.text
+            response = await client.post("/runs", json=[])
+            assert response.status_code == 400
+
+            invalid = make_run("Missing trace")
+            del invalid["trace_id"]
+            response = await client.post("/runs", json=[make_run("Valid"), invalid])
+            assert response.status_code == 422
+
+            assert await db.fetchval("SELECT count(*) FROM runs") == before_rows
+            after_keys = set()
+            async for page in s3.get_paginator("list_objects_v2").paginate(
+                Bucket=settings.S3_BUCKET_NAME
+            ):
+                after_keys.update(item["Key"] for item in page.get("Contents", []))
+            assert after_keys == before_keys
+
+            response = await client.get("/runs/not-a-uuid")
+            assert response.status_code == 422
+            response = await client.get(f"/runs/{uuid.uuid4()}")
+            assert response.status_code == 404
+    finally:
+        await db.close()
+
+
+async def test_missing_storage_object():
+    # This test deletes only the object for the run it creates, in the test bucket.
+    assert settings.S3_BUCKET_NAME == "runs-test", "Use RUN_HANDLER_ENV=test"
+    db = await asyncpg.connect(
+        host=settings.DB_HOST,
+        port=settings.DB_PORT,
+        user=settings.DB_USER,
+        password=settings.DB_PASSWORD,
+        database=settings.DB_NAME,
+        timeout=5,
+    )
+    try:
+        async with get_session().create_client(
+            "s3",
+            endpoint_url=settings.S3_ENDPOINT_URL,
+            aws_access_key_id=settings.S3_ACCESS_KEY,
+            aws_secret_access_key=settings.S3_SECRET_KEY,
+            region_name=settings.S3_REGION,
+        ) as s3, AsyncClient(app=app, base_url="http://test") as client:
+            run = make_run(inputs={"prompt": "hello"}, outputs={"answer": "world"})
+            await assert_roundtrip(client, [run])
+            reference = await db.fetchval(
+                "SELECT inputs FROM runs WHERE id = $1", uuid.UUID(run["id"])
+            )
+            # Reference format: s3://bucket/object-key#start:end/field
+            key = reference.split("#", 1)[0].split("/", 3)[3]
+            await s3.delete_object(Bucket=settings.S3_BUCKET_NAME, Key=key)
+
+            response = await client.get(f"/runs/{run['id']}")
+            # Keep this baseline defect visible; do not change application code.
+            assert response.status_code >= 400, response.text
+    finally:
+        await db.close()
