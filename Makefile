@@ -1,4 +1,4 @@
-.PHONY: db-up db-down db-migrate db-downgrade db-migrate-test server format lint lint-fix test test-correctness test-setup benchmark benchmark-compare benchmark-compare-save memprofile
+.PHONY: db-up db-down db-migrate db-downgrade db-migrate-test server format lint lint-fix test test-setup benchmark benchmark-compare benchmark-compare-save memprofile
 
 # Start all database services defined in docker-compose-db.yaml
 db-up:
@@ -42,13 +42,9 @@ test-setup:
 	RUN_HANDLER_ENV=test poetry run python -m scripts.reset_test_bucket
 	$(MAKE) db-migrate-test
 
-# Run tests with test environment
+# Run correctness tests with the test environment, excluding benchmarks
 test: test-setup
-	RUN_HANDLER_ENV=test poetry run pytest -s
-
-# Run only the eight correctness tests
-test-correctness: test-setup
-	RUN_HANDLER_ENV=test poetry run pytest tests/test_runs.py -v --tb=short
+	RUN_HANDLER_ENV=test poetry run pytest tests --ignore=tests/benchmarks -s
 
 # Run performance benchmarks
 benchmark: test-setup

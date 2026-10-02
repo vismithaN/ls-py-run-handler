@@ -49,8 +49,9 @@ The correctness fix is separate from performance optimizations.
 
 | Step | Change | Verification |
 |---|---|---|
-| Reliable test command | Installed Poetry on PATH; replaced `mc` reset with S3 API; added `make test-correctness`. Setup commit: `b5df2f7`. | Clean setup completed; original code still reproduced 7 passes / 1 failure. |
-| Correctness fix | Unreadable stored data now returns HTTP `503` instead of empty fields with `200`. Fix commit: `d363fb8`. | `make test-correctness`: **8 passed** in 8.70 seconds; two existing deprecation warnings. |
+| Reliable test command | Installed Poetry on PATH; replaced `mc` reset with S3 API. Setup commit: `b5df2f7`. | Clean setup completed; original code still reproduced 7 passes / 1 failure. |
+| Correctness fix | Unreadable stored data now returns HTTP `503` instead of empty fields with `200`. Fix commit: `d363fb8`. | Correctness suite: **8 passed** in 8.70 seconds; two existing deprecation warnings. |
+| Separate commands | `make test` excludes `tests/benchmarks`; `make benchmark` selects only benchmarks. Removed the extra correctness target. | `make test`: **8 passed** in 9.30 seconds. Benchmark selection: four cases collected; benchmarks not executed in this step. |
 
 Keep `b11a9b9` as the original reference. Identify the separate correctness-fix
 revision when collecting the corrected performance baseline. No performance
