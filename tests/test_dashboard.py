@@ -135,7 +135,17 @@ def test_dashboard_serves_assets_and_persists_only_valid_same_origin_labels(
         assert client.get("/assets/dashboard.js").status_code == 200
         assert client.get("/assets/styles.css").status_code == 200
         assert client.get("/assets/profiles.js").status_code == 200
-        assert 'role="tablist"' in client.get("/").text
+        page = client.get("/").text
+        assert 'role="tablist"' in page
+        assert 'aria-orientation="vertical"' in page
+        assert 'id="sidebar-toggle"' in page
+        assert 'id="dashboard-views"' in page
+        assert 'id="profile-section-nav"' in page
+        assert 'data-profile-section="profile-cpu"' in page
+        assert 'data-profile-section="profile-memory"' in page
+        assert 'data-profile-section="profile-findings"' in page
+        assert 'id="comparison-set-control" hidden' in page
+        assert "How results and stage names work" not in page
         assert client.get("/api/reports").json()["reports"][0]["label"] == "Baseline"
         payload = {"report_id": "baseline.json", "label": "Connection pooling"}
         assert client.post("/api/stage-name", json=payload).status_code == 403

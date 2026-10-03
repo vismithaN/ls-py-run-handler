@@ -5,8 +5,11 @@ const profileState = { data: null, stage: '', signature: '', pending: false };
 
 function selectDashboardView(view) {
   const profiles = view === 'profiles';
+  const changed = byId('profile-panel').hidden === profiles;
   byId('benchmark-panel').hidden = profiles;
   byId('profile-panel').hidden = !profiles;
+  if (changed) window.scrollTo(0, 0);
+  updateProfileSectionNav();
   document.querySelectorAll('[data-view]').forEach(button => {
     const selected = button.dataset.view === view;
     button.setAttribute('aria-selected', String(selected));
@@ -24,12 +27,49 @@ function selectDashboardView(view) {
 }
 
 const dashboardTabs = [...document.querySelectorAll('[data-view]')];
+const sidebarToggle = byId('sidebar-toggle');
+const sidebarLayout = byId('dashboard-layout');
+const sidebarViews = byId('dashboard-views');
+const profileSectionNav = byId('profile-section-nav');
+
+function updateProfileSectionNav() {
+  profileSectionNav.hidden = sidebarLayout.classList.contains('sidebar-collapsed') ||
+    byId('profile-panel').hidden || !profileState.data?.stages.length;
+}
+
+function setSidebarCollapsed(collapsed) {
+  sidebarLayout.classList.toggle('sidebar-collapsed', collapsed);
+  sidebarViews.hidden = collapsed;
+  sidebarToggle.setAttribute('aria-expanded', String(!collapsed));
+  sidebarToggle.setAttribute('aria-label', collapsed ? 'Expand navigation' : 'Collapse navigation');
+  sidebarToggle.querySelector('.sidebar-toggle-icon').textContent = collapsed ? '›' : '‹';
+  sidebarToggle.querySelector('.sidebar-toggle-label').textContent = collapsed ? 'Expand menu' : 'Collapse menu';
+  updateProfileSectionNav();
+}
+
+try {
+  setSidebarCollapsed(localStorage.getItem('benchmark-dashboard-sidebar') === 'collapsed');
+} catch {
+  setSidebarCollapsed(false);
+}
+sidebarToggle.addEventListener('click', () => {
+  const collapsed = !sidebarLayout.classList.contains('sidebar-collapsed');
+  setSidebarCollapsed(collapsed);
+  try { localStorage.setItem('benchmark-dashboard-sidebar', collapsed ? 'collapsed' : 'expanded'); } catch { /* Storage is optional. */ }
+});
+
+document.querySelectorAll('[data-profile-section]').forEach(button => {
+  button.addEventListener('click', () => {
+    byId(button.dataset.profileSection)?.scrollIntoView({ block: 'start' });
+  });
+});
+
 dashboardTabs.forEach((button, index) => {
   button.addEventListener('click', () => selectDashboardView(button.dataset.view));
   button.addEventListener('keydown', event => {
     let next;
-    if (event.key === 'ArrowRight') next = (index + 1) % dashboardTabs.length;
-    if (event.key === 'ArrowLeft') next = (index - 1 + dashboardTabs.length) % dashboardTabs.length;
+    if (event.key === 'ArrowDown') next = (index + 1) % dashboardTabs.length;
+    if (event.key === 'ArrowUp') next = (index - 1 + dashboardTabs.length) % dashboardTabs.length;
     if (event.key === 'Home') next = 0;
     if (event.key === 'End') next = dashboardTabs.length - 1;
     if (next == null) return;
@@ -100,6 +140,7 @@ function cpuSeconds(value) {
 function renderCpuProfiles(stage) {
   const cpu = stage.cpu;
   const section = profileSection('CPU profiling results', cpu.procedure);
+  section.id = 'profile-cpu';
   section.append(html('p', 'profile-meta', cpu.profiler), html('p', '', cpu.reading_guide));
   if (cpu.phase_medians?.length) {
     const phases = html('article', 'profile-card cpu-card');
@@ -128,6 +169,7 @@ function renderCpuProfiles(stage) {
 function renderMemoryProfiles(stage) {
   const memory = stage.memory;
   const section = profileSection('Memory profiling results', 'Peak tracked allocation · whole benchmark test · not server-only RAM or RSS.');
+  section.id = 'profile-memory';
   section.append(html('p', 'profile-meta', memory.profiler));
   const chart = html('article', 'profile-card memory-card');
   chart.append(html('h3', '', 'Peak tracked allocation by workload'), html('p', 'profile-meta', 'Whole benchmark test · MiB · not server-only RAM'));
@@ -166,6 +208,7 @@ function renderMemoryProfiles(stage) {
 function renderProfileFindings(stage) {
   const results = stage.finding_mode === 'results';
   const section = profileSection(results ? 'Results of this optimization' : 'Findings → next experiments', results ? 'Profile evidence for this stage. Benchmark speed is shown in Benchmark graphs.' : 'Targets below are hypotheses, not measured improvements. ↓ = expected decrease.');
+  section.id = 'profile-findings';
   const card = html('article', 'profile-card');
   const rows = stage.findings.map(finding => {
     const evidence = html('div', '', finding.evidence);
@@ -191,6 +234,7 @@ function renderProfileInterpretation() {
   select.value = profileState.stage;
   select.disabled = data.stages.length < 2;
   byId('profile-empty').hidden = Boolean(stage);
+  updateProfileSectionNav();
   byId('profile-download').hidden = !stage;
   byId('profile-print').disabled = !stage;
   const content = byId('profile-content');

@@ -82,6 +82,7 @@ function createControls() {
   state.group = state.data.groups.some(group => group.id === previous) ? previous : state.data.groups[0]?.id || '';
   groupSelect.value = state.group;
   groupSelect.disabled = state.data.groups.length < 2;
+  byId('comparison-set-control').hidden = state.data.groups.length < 2;
   if (!byId('workloads').children.length) {
     Object.entries(state.data.workloads).forEach(([name, label], index) => {
       state.visible.add(name);
