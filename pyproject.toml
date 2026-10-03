@@ -28,6 +28,8 @@ httpx = "^0.25.0"
 ruff = "^0.2.2"
 pytest-benchmark = "^5.1.0"
 pytest-memray = "^1.7.0"
+yappi = "^1.7.6"
+memray = "^1.17.2"
 
 [build-system]
 requires = ["poetry-core"]
