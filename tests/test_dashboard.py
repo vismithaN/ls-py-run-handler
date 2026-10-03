@@ -6,7 +6,13 @@ import math
 
 from fastapi.testclient import TestClient
 
-from scripts.benchmark_dashboard import ROOT, WORKLOADS, ReportStore, create_app
+from scripts.benchmark_dashboard import (
+    ROOT,
+    WORKLOADS,
+    InterpretationStore,
+    ReportStore,
+    create_app,
+)
 
 
 def report():
@@ -81,6 +87,31 @@ def test_reports_update_safely_and_keep_comparison_sets_separate(tmp_path):
     assert len(store.snapshot()["reports"]) == 1
 
 
+def test_profile_stages_use_explicit_order(tmp_path, monkeypatch):
+    saved = tmp_path / "interpretations"
+    saved.mkdir()
+    baseline = json.loads(
+        (ROOT / "reports" / "interpretations" / "baseline.json").read_text()
+    )
+    optimized = json.loads(
+        (ROOT / "reports" / "interpretations" / "one-pass-encoder.json").read_text()
+    )
+    baseline["order"] = 1
+    optimized["order"] = 0
+    (saved / "baseline.json").write_text(json.dumps(baseline))
+    (saved / "one-pass-encoder.json").write_text(json.dumps(optimized))
+    store = InterpretationStore(saved)
+    monkeypatch.setattr(store, "source_status", lambda source: "verified")
+
+    snapshot = store.snapshot()
+
+    assert [stage["id"] for stage in snapshot["stages"]] == [
+        "one-pass-encoder",
+        "baseline",
+    ]
+    assert not snapshot["warnings"]
+
+
 def test_dashboard_serves_assets_and_persists_only_valid_same_origin_labels(
     tmp_path, monkeypatch
 ):
@@ -140,10 +171,12 @@ def test_dashboard_serves_assets_and_persists_only_valid_same_origin_labels(
         assert 'aria-orientation="vertical"' in page
         assert 'id="sidebar-toggle"' in page
         assert 'id="dashboard-views"' in page
-        assert 'id="profile-section-nav"' in page
-        assert 'data-profile-section="profile-cpu"' in page
-        assert 'data-profile-section="profile-memory"' in page
-        assert 'data-profile-section="profile-findings"' in page
+        assert 'id="profile-stage-nav"' in page
+        assert 'aria-label="Profile stages"' in page
+        assert 'id="profile-view-title"' in page
+        assert 'id="profile-stage-summary"' in page
+        assert 'id="profile-downloads"' in page
+        assert 'id="profile-stage"' not in page
         assert 'id="comparison-set-control" hidden' in page
         assert "How results and stage names work" not in page
         assert client.get("/api/reports").json()["reports"][0]["label"] == "Baseline"

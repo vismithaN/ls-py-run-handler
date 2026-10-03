@@ -1,6 +1,7 @@
 {
   "schema_version": 1,
   "id": "baseline",
+  "order": 0,
   "title": "Baseline",
   "commit": "bdf123994e632380fe5a76e2e998ce7700c8ece9",
   "review_status": "Hypotheses · not tested",

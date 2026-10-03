@@ -1,8 +1,8 @@
-from aiobotocore.session import get_session
 from fastapi import FastAPI
 
 from ls_py_handler.api.routes.runs import router as runs_router
 from ls_py_handler.config.settings import settings
+from ls_py_handler.s3 import get_s3_session
 
 app = FastAPI(
     title=settings.APP_TITLE,
@@ -18,7 +18,7 @@ app.include_router(runs_router)
 async def startup_event():
     """Initialize resources when the application starts."""
     # Create S3 bucket if it doesn't exist
-    session = get_session()
+    session = get_s3_session()
     async with session.create_client(
         "s3",
         endpoint_url=settings.S3_ENDPOINT_URL,

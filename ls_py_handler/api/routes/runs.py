@@ -5,11 +5,11 @@ from typing import Any, Dict, List, Optional
 
 import asyncpg
 import orjson
-from aiobotocore.session import get_session
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import UUID4, BaseModel, Field
 
 from ls_py_handler.config.settings import settings
+from ls_py_handler.s3 import get_s3_session
 
 router = APIRouter(prefix="/runs", tags=["runs"])
 
@@ -40,7 +40,7 @@ async def get_db_conn():
 
 async def get_s3_client():
     """Get an S3 client for MinIO."""
-    session = get_session()
+    session = get_s3_session()
     async with session.create_client(
         "s3",
         endpoint_url=settings.S3_ENDPOINT_URL,

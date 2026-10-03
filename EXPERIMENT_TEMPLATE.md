@@ -69,7 +69,8 @@ The correctness fix is separate from performance optimizations.
 
 | Step | Change | Verification |
 |---|---|---|
-| One-pass POST offsets | Build the same batch JSON in a byte buffer and record each large field's offset as it is written. No connection, database-write or GET change. Uncommitted. | **10/10 tests passed**; **4/4 original benchmarks passed**; **4/4 original Memray profiles passed**; **12/12 cold CPU captures correct**. Reports are listed below. |
+| One-pass POST offsets | Build the same batch JSON in a byte buffer and record each large field's offset as it is written. No connection, database-write or GET change. Committed as `8f5b534`. | **10/10 tests passed**; **4/4 original benchmarks passed**; **4/4 original Memray profiles passed**; **12/12 cold CPU captures correct**. Reports are listed below. |
+| S3 session experiment | Reuse the aiobotocore session, but still create and close an S3 client for each request. This isolates SDK setup from connection pooling and keeps the original benchmark loop behavior testable. | **13/13 tests passed** (10 run tests and 3 dashboard tests); **4/4 original benchmarks**, **4/4 original Memray profiles**, **12/12 cold CPU captures**, and **12/12 diagnostics** passed. Diagnostic requests: **60/60 correct**; S3 request and connection counts unchanged. One original benchmark report per stage so far. |
 
 Keep `b11a9b9` as the original reference. Identify the separate correctness-fix
 revision when collecting the corrected performance baseline. The full-workload
@@ -275,6 +276,7 @@ download bodies consumed by the application; they exclude headers/TCP framing.
 | **Corrected baseline — no performance optimizations** | Original timing/memory workflows and supplementary CPU time/profiles/diagnostics for the four supplied scenarios | Establish the starting numbers after the separate correctness fix | Collected on `bdf1239`; primary numbers: `measurements/baseline-bdf1239-gxSv1A8k/primary-summary.csv`; supplementary numbers: `measurements/baseline-bdf1239-gxSv1A8k/supplementary/20261003T011935.704701Z/summary.csv` |
 | **Connection pooling** | POST/GET latency, new connections and peak open connections | Fewer new connections and lower request latency; bounded open connections | Not measured |
 | **One-pass encoding** | Original POST benchmark latency; cold profiled first-request CPU; original Memray peak | Less repeated work, lower memory use, and faster ingestion | Clean commit `8f5b534`: POST 500 median **2.107 → 0.570 s (−72.9%)**; POST 50 **0.620 → 0.360 s (−41.9%)**. Cold POST 500 first-request CPU **1.771 → 0.725 s (−59.0%)**. POST 500 peak **191.401 → 171.241 MiB (−10.5%)**; POST 50 **132.352 → 117.343 MiB (−11.3%)**. GET code unchanged. |
+| **Reuse S3 SDK session, not client** | S3 client-setup CPU, original POST/GET latency and Memray peak; correctness across benchmark event loops | Shared session may cache SDK setup work. S3 clients still open/close per request, so S3 request and connection counts are not expected to fall. Memory improvement is uncertain. | First report: GET 10 KB median **89.8 → 41.1 ms**; GET 100 KB **99.9 → 48.1 ms**. POST 500 **594.8 → 566.7 ms**; POST 50 **394.4 → 322.9 ms**. Cold profiled `get_s3_client` CPU, session 1, POST 500: **0.1666 → 0.0323 s inclusive**. Diagnostic S3 requests/connections per request: POST **1 → 1**, GET **3 → 3**. See per-workload table and limitations below. |
 | **Bulk database writes** | POST latency, ingestion throughput and database command count | Fewer database commands and faster batch ingestion | Not measured |
 | **One S3 read per run** | GET latency, S3 request count and downloaded bytes | Fewer S3 requests and faster retrieval; measure the byte-transfer tradeoff | Not measured |
 
@@ -283,7 +285,52 @@ workflows (`make benchmark`, `make memprofile`, cold `make measure --passes cpu`
 at each stage. Keep other harness passes optional and separate. Record expected
 effects before testing; do not invent expected percentages.
 
-One-pass reports: `.benchmarks/Darwin-CPython-3.11-64bit/0003_baseline.json`,
+**Why session reuse first:** The one-pass cold CPU profile still shows about
+0.162–0.167 s inclusive CPU in `get_s3_client` per first request. Original
+Memray attributes 43.0 MiB of the POST-500 peak to **S3 SDK setup / data**.
+This memory group includes data handling, so it is not a measurement of client
+construction alone. Reusing one client for the whole application might avoid
+more setup, but it also shares its HTTP connections and failure state across
+requests, needs explicit startup/shutdown and recovery handling, and must work
+with the supplied benchmark's new event loop per iteration. For this stage,
+retain a fresh client per request and cache only the SDK session. Test whether
+that actually helps; do not claim a memory or connection reduction in advance.
+
+**First session-reuse results (one original benchmark report per stage):**
+
+| Workload | Benchmark median, one-pass → session reuse | Cold first-request CPU median, one-pass → session reuse | Original Memray whole-test peak, one-pass → session reuse |
+|---|---:|---:|---:|
+| POST 500 × 10 KB | 594.8 → 566.7 ms | 0.725 → 0.577 s | 171.241 → 151.393 MiB |
+| POST 50 × 100 KB | 394.4 → 322.9 ms | 0.547 → 0.414 s | 117.343 → 113.449 MiB |
+| GET 10 KB | 89.8 → 41.1 ms | 0.346 → 0.219 s | 14.625 → 9.269 MiB |
+| GET 100 KB | 99.9 → 48.1 ms | 0.467 → 0.339 s | 7.126 → 2.595 MiB |
+
+| Diagnostic count per request (5 requests × 3 sessions) | Before | After |
+|---|---:|---:|
+| POST S3 requests / new S3 TCP connections | 1 / 1 | 1 / 1 |
+| GET S3 requests / new S3 TCP connections | 3 / 3 | 3 / 3 |
+
+The benchmark figures are provisional: each stage has one saved report, not
+repeated independent benchmark reports or a confidence interval. Yappi CPU is
+profiled CPU, not wall latency. `get_s3_client` still creates and closes a new
+client on every request; the cached object is the SDK session only. Memray
+captures each benchmark test separately. For later tests, the reused session
+may have been allocated during an earlier test and fall outside that test's
+capture; these peak changes are **not** full-process RSS savings. Check S3
+connection counts separately rather than inferring them from timing or memory.
+This candidate was uncommitted when measured; the optional measurement metadata
+records its application fingerprint, but rerun the final comparison from a clean
+revision before using these numbers as the presentation result.
+
+Sources: one-pass `.benchmarks/Darwin-CPython-3.11-64bit/0004_baseline.json`;
+session reuse `.benchmarks/Darwin-CPython-3.11-64bit/0005_baseline.json`;
+session-reuse Memray `profiles/memory/20261003T203155Z-JBsZkyK5/` and cold
+Yappi `measurements/20261003T203239.780065Z/`. Diagnostic comparison:
+`measurements/baseline-bdf1239-gxSv1A8k/supplementary/20261003T011935.704701Z/`
+and `measurements/20261003T203743.792132Z/`; both used five measured
+requests per workload in each of three sessions and excluded startup/seeding.
+
+One-pass reports: `.benchmarks/Darwin-CPython-3.11-64bit/0004_baseline.json`,
 `profiles/memory/20261003T183206Z-4gQXLF1M/`, and
 `measurements/20261003T183247.835556Z/summary.csv` with matching raw Yappi
 files under `profiles/cpu/20261003T183247.835556Z/`. The dashboard labels the
@@ -308,6 +355,7 @@ before/after series.
 |---|---|---|
 | Connection pooling | POST/GET latency; new connections by service | Peak open connections and connection reuse |
 | One-pass encoding | POST latency; peak allocated memory; CPU time | CPU and allocation profiles showing where work changed |
+| S3 SDK session reuse | POST/GET latency; cold S3 setup CPU; peak allocated memory | Check whether client setup falls while clients stay request-scoped; report any retained-memory cost |
 | Bulk database writes | POST latency; POST runs/s | PostgreSQL commands by operation |
 | One S3 read per run | GET latency; S3 requests | Downloaded bytes and request-count changes |
 | Overall | Baseline → each optimization → final version, separately by workload and metric | Correctness/failure counts and observed tradeoffs throughout |

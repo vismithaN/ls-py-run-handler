@@ -10,9 +10,9 @@
         localStorage.getItem('benchmark-dashboard-theme') === 'dark' ? 'dark' : 'light';
     } catch { /* Theme switching still works if browser storage is unavailable. */ }
   </script>
-  <link rel="stylesheet" href="/assets/styles.css?v=profile-nav-2">
-  <script src="/assets/dashboard.js?v=profile-nav-2" defer></script>
-  <script src="/assets/profiles.js?v=profile-nav-2" defer></script>
+  <link rel="stylesheet" href="/assets/styles.css?v=profile-stages-1">
+  <script src="/assets/dashboard.js?v=profile-stages-1" defer></script>
+  <script src="/assets/profiles.js?v=profile-stages-1" defer></script>
 </head>
 <body>
   <main>
@@ -36,11 +36,7 @@
           <button type="button" id="benchmark-tab" role="tab" aria-controls="benchmark-panel" aria-selected="true" data-view="benchmarks">Benchmark graphs</button>
           <button type="button" id="profile-tab" role="tab" aria-controls="profile-panel" aria-selected="false" tabindex="-1" data-view="profiles">Profile interpretation</button>
         </nav>
-        <nav id="profile-section-nav" class="profile-section-nav" aria-label="Profile interpretation sections" hidden>
-          <button type="button" data-profile-section="profile-cpu">CPU profiling</button>
-          <button type="button" data-profile-section="profile-memory">Memory profiling</button>
-          <button type="button" data-profile-section="profile-findings">Findings</button>
-        </nav>
+        <nav id="profile-stage-nav" class="profile-section-nav" role="tablist" aria-label="Profile stages" aria-orientation="vertical" hidden></nav>
       </aside>
       <div class="dashboard-content">
         <section id="benchmark-panel" role="tabpanel" aria-labelledby="benchmark-tab">
@@ -62,9 +58,9 @@
         </section>
         <section id="profile-panel" role="tabpanel" aria-labelledby="profile-tab" hidden>
           <div class="controls profile-controls">
-            <label class="environment">Interpretation stage<select id="profile-stage" aria-label="Profile interpretation stage"></select></label>
+            <div><strong id="profile-view-title">Profile interpretation</strong><p id="profile-stage-summary" class="profile-meta">Loading saved stages…</p></div>
             <div class="profile-actions">
-              <a id="profile-download" class="button-link" hidden>Download interpretation</a>
+              <span id="profile-downloads" class="profile-downloads"></span>
               <button id="profile-print" type="button">Print / save PDF</button>
             </div>
           </div>

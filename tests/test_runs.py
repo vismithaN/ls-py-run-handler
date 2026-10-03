@@ -1,4 +1,6 @@
+import asyncio
 import uuid
+from unittest.mock import patch
 
 import asyncpg
 import pytest
@@ -8,6 +10,7 @@ from httpx import AsyncClient
 from ls_py_handler.api.routes.runs import Run
 from ls_py_handler.config.settings import settings
 from ls_py_handler.main import app
+from ls_py_handler.s3 import get_s3_session
 
 pytestmark = pytest.mark.asyncio
 
@@ -61,6 +64,32 @@ async def test_create_and_get_run():
     ]
     async with AsyncClient(app=app, base_url="http://test") as client:
         await assert_roundtrip(client, runs)
+
+
+async def test_s3_session_reused_but_clients_remain_request_scoped():
+    session = get_s3_session()
+    with patch.object(
+        session, "create_client", wraps=session.create_client
+    ) as create_client:
+        async with AsyncClient(app=app, base_url="http://test") as client:
+            await assert_roundtrip(client, [make_run("Session reuse")])
+
+    assert get_s3_session() is session
+    assert create_client.call_count == 2  # One client for POST, another for GET.
+
+
+async def test_s3_session_handles_parallel_requests():
+    session = get_s3_session()
+    runs = [
+        make_run(f"Parallel {index}", inputs={"index": index}) for index in range(3)
+    ]
+    with patch.object(
+        session, "create_client", wraps=session.create_client
+    ) as create_client:
+        async with AsyncClient(app=app, base_url="http://test") as client:
+            await asyncio.gather(*(assert_roundtrip(client, [run]) for run in runs))
+
+    assert create_client.call_count == 6  # Each POST and GET has its own client.
 
 
 async def test_generated_ids():
@@ -210,5 +239,6 @@ async def test_missing_storage_object():
             response = await client.get(f"/runs/{run['id']}")
             assert response.status_code == 503, response.text
             assert response.json() == {"detail": "Stored run data is unavailable"}
+            await assert_roundtrip(client, [make_run("After failed S3 read")])
     finally:
         await db.close()

@@ -260,6 +260,12 @@ class InterpretationStore:
                 stage = json.loads(path.read_text())
                 if stage["schema_version"] != 1 or stage["id"] != path.stem:
                     raise ValueError("unsupported schema or mismatched stage ID")
+                if (
+                    not isinstance(stage.get("order"), int)
+                    or isinstance(stage["order"], bool)
+                    or stage["order"] < 0
+                ):
+                    raise ValueError("stage order must be a nonnegative integer")
                 for section in ("cpu", "memory"):
                     if not isinstance(stage[section]["workloads"], list):
                         raise ValueError("invalid workload results")
@@ -305,6 +311,10 @@ class InterpretationStore:
                 stages.append(stage)
             except (OSError, ValueError, KeyError, TypeError, AttributeError) as error:
                 warnings.append(f"{path.name}: {error}")
+        orders = [stage["order"] for stage in stages]
+        if len(orders) != len(set(orders)):
+            warnings.append("profile interpretation stage orders must be unique")
+        stages.sort(key=lambda stage: (stage["order"], stage["id"]))
         return {"stages": stages, "warnings": warnings}
 
     def stage(self, stage_id):

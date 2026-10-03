@@ -1,7 +1,10 @@
 'use strict';
 
 // Curated results are loaded from files, not generated or profiled in the browser.
-const profileState = { data: null, stage: '', signature: '', pending: false };
+const profileState = { data: null, stage: '', signature: '', pending: false, charts: [] };
+const profileChartObserver = new ResizeObserver(entries => {
+  entries.forEach(entry => entry.target.drawProfileChart?.());
+});
 
 function selectDashboardView(view) {
   const profiles = view === 'profiles';
@@ -9,7 +12,7 @@ function selectDashboardView(view) {
   byId('benchmark-panel').hidden = profiles;
   byId('profile-panel').hidden = !profiles;
   if (changed) window.scrollTo(0, 0);
-  updateProfileSectionNav();
+  updateProfileStageNav();
   document.querySelectorAll('[data-view]').forEach(button => {
     const selected = button.dataset.view === view;
     button.setAttribute('aria-selected', String(selected));
@@ -18,7 +21,7 @@ function selectDashboardView(view) {
   tooltip.hidden = true;
   history.replaceState(null, '', profiles ? '#profiles' : '#benchmarks');
   if (profiles) {
-    byId('status').textContent = 'Saved profile findings · checks every 3s';
+    byId('status').textContent = 'Saved profile comparisons · checks every 3s';
     refreshProfiles();
   } else {
     if (state.data) renderCharts();
@@ -30,10 +33,10 @@ const dashboardTabs = [...document.querySelectorAll('[data-view]')];
 const sidebarToggle = byId('sidebar-toggle');
 const sidebarLayout = byId('dashboard-layout');
 const sidebarViews = byId('dashboard-views');
-const profileSectionNav = byId('profile-section-nav');
+const profileStageNav = byId('profile-stage-nav');
 
-function updateProfileSectionNav() {
-  profileSectionNav.hidden = sidebarLayout.classList.contains('sidebar-collapsed') ||
+function updateProfileStageNav() {
+  profileStageNav.hidden = sidebarLayout.classList.contains('sidebar-collapsed') ||
     byId('profile-panel').hidden || !profileState.data?.stages.length;
 }
 
@@ -44,7 +47,7 @@ function setSidebarCollapsed(collapsed) {
   sidebarToggle.setAttribute('aria-label', collapsed ? 'Expand navigation' : 'Collapse navigation');
   sidebarToggle.querySelector('.sidebar-toggle-icon').textContent = collapsed ? '›' : '‹';
   sidebarToggle.querySelector('.sidebar-toggle-label').textContent = collapsed ? 'Expand menu' : 'Collapse menu';
-  updateProfileSectionNav();
+  updateProfileStageNav();
 }
 
 try {
@@ -56,12 +59,6 @@ sidebarToggle.addEventListener('click', () => {
   const collapsed = !sidebarLayout.classList.contains('sidebar-collapsed');
   setSidebarCollapsed(collapsed);
   try { localStorage.setItem('benchmark-dashboard-sidebar', collapsed ? 'collapsed' : 'expanded'); } catch { /* Storage is optional. */ }
-});
-
-document.querySelectorAll('[data-profile-section]').forEach(button => {
-  button.addEventListener('click', () => {
-    byId(button.dataset.profileSection)?.scrollIntoView({ block: 'start' });
-  });
 });
 
 dashboardTabs.forEach((button, index) => {
@@ -110,7 +107,7 @@ function profileTable(title, headers, rows, numeric = []) {
 function profileSource(stage, id, label = 'Open source report') {
   const source = stage.sources[id];
   if (!source?.available) {
-    const reason = source?.status === 'changed' ? 'changed since baseline' : 'missing';
+    const reason = source?.status === 'changed' ? 'changed since capture' : 'missing';
     return html('span', 'profile-source source-missing', `${label} · ${reason}`);
   }
   const link = html('a', 'profile-source', label);
@@ -120,8 +117,9 @@ function profileSource(stage, id, label = 'Open source report') {
   return link;
 }
 
-function profileSection(title, description) {
+function profileSection(title, description, id) {
   const section = html('section', 'profile-section');
+  section.id = id;
   section.append(html('h2', '', title), html('p', '', description));
   return section;
 }
@@ -137,136 +135,530 @@ function cpuSeconds(value) {
   return value > 0 && value < 0.001 ? '<0.001' : number(value, 3);
 }
 
-function renderCpuProfiles(stage) {
-  const cpu = stage.cpu;
-  const section = profileSection('CPU profiling results', cpu.procedure);
-  section.id = 'profile-cpu';
-  section.append(html('p', 'profile-meta', cpu.profiler), html('p', '', cpu.reading_guide));
-  if (cpu.phase_medians?.length) {
-    const phases = html('article', 'profile-card cpu-card');
-    phases.append(html('h3', '', 'Cold CPU by phase · median of 3 processes'));
-    phases.append(profileTable('Cold CPU phase medians in seconds', ['Workload', 'Imports', 'Startup', 'First request', 'Total'], cpu.phase_medians.map(row => [row.label, cpuSeconds(row.imports_s), cpuSeconds(row.startup_s), cpuSeconds(row.first_request_s), cpuSeconds(row.total_s)]), [1, 2, 3, 4]));
-    phases.append(profileSource(stage, 'cold-cpu-summary', 'Download 12-capture summary'));
-    section.append(phases);
-  }
-  const grid = html('div', 'profile-grid');
-  cpu.workloads.forEach(workload => {
-    const card = html('article', 'profile-card cpu-card');
-    card.append(html('h3', '', workload.label), html('p', 'profile-meta', 'Function calls · session 1 · one cold capture'));
-    const rows = workload.functions.map(result => {
-      const functionName = html('div', '', result.label);
-      functionName.title = result.function;
-      return [functionName, number(result.calls, 0), cpuSeconds(result.self_s), cpuSeconds(result.inclusive_s)];
+function percentChange(before, after) {
+  if (!Number.isFinite(before) || !Number.isFinite(after) || before === 0) return null;
+  return (after / before - 1) * 100;
+}
+
+function improvementText(before, after) {
+  const change = percentChange(before, after);
+  if (change == null) return 'No comparison';
+  if (before > 0 && after === 0) return 'eliminated';
+  if (Math.abs(change) < 5) return 'unchanged';
+  return `${Math.abs(change).toLocaleString('en-US', { maximumFractionDigits: 1 })}% ${change < 0 ? 'lower' : 'higher'}`;
+}
+
+function improvementClass(before, after) {
+  const change = percentChange(before, after);
+  if (change == null || Math.abs(change) < 5) return 'neutral';
+  return change < 0 ? 'improved' : 'regressed';
+}
+
+function measuredValue(value, digits) {
+  const threshold = 10 ** -digits;
+  return value > 0 && value < threshold ? `<${number(threshold, digits)}` : number(value, digits);
+}
+
+function stageColor(index) {
+  return index === 0 ? 'var(--baseline)' : `var(--series-${(index - 1) % 4})`;
+}
+
+function stageLegend(stages) {
+  const legend = html('div', 'profile-stage-legend');
+  stages.forEach((stage, index) => {
+    const item = html('span', 'profile-stage-key');
+    const swatch = html('span', 'profile-stage-swatch');
+    swatch.style.setProperty('--stage-color', stageColor(index));
+    item.append(swatch, html('span', '', stage.title));
+    legend.append(item);
+  });
+  return legend;
+}
+
+function workload(section, id) {
+  return section?.workloads?.find(item => item.id === id);
+}
+
+function phase(stage, id) {
+  return stage.cpu.phase_medians?.find(item => item.id === id);
+}
+
+function functionResult(stage, workloadId, label) {
+  return workload(stage.cpu, workloadId)?.functions?.find(item => item.label === label);
+}
+
+function allocation(stage, workloadId, labels) {
+  const accepted = Array.isArray(labels) ? labels : [labels];
+  return workload(stage.memory, workloadId)?.allocations?.find(item => accepted.includes(item.label))?.mib;
+}
+
+function axisScale(maximum) {
+  const rawStep = Math.max(maximum / 4, Number.EPSILON);
+  const magnitude = 10 ** Math.floor(Math.log10(rawStep));
+  const normalized = rawStep / magnitude;
+  const factor = [1, 2, 2.5, 5, 10].find(item => item >= normalized) || 10;
+  const step = factor * magnitude;
+  const top = Math.ceil(maximum / step) * step;
+  return { step, top, ticks: Array.from({ length: Math.round(top / step) + 1 }, (_, index) => index * step) };
+}
+
+function appendWrappedSvgLabel(parent, x, y, label, availableWidth) {
+  const words = label.split(' ');
+  const lines = [];
+  const approximateCharacters = Math.max(Math.floor(availableWidth / 7), 10);
+  words.forEach(word => {
+    const current = lines.at(-1);
+    if (!current || `${current} ${word}`.length > approximateCharacters) lines.push(word);
+    else lines[lines.length - 1] = `${current} ${word}`;
+  });
+  while (lines.length > 2) lines[1] = `${lines[1]} ${lines.pop()}`;
+  const text = svgNode('text', { class: 'profile-svg-x-label', x, y, 'text-anchor': 'middle' });
+  lines.forEach((line, index) => text.append(svgNode('tspan', { x, dy: index ? 15 : 0 }, line)));
+  parent.append(text);
+}
+
+function drawProfileComparisonChart(plot, stages, rows, unit, digits, axes, title) {
+  const svg = plot.querySelector('svg');
+  svg.replaceChildren();
+  const width = Math.max(plot.clientWidth || 0, rows.length * 135, 620);
+  const height = 390;
+  const margin = { top: 38, right: 22, bottom: 92, left: 78 };
+  const innerWidth = width - margin.left - margin.right;
+  const innerHeight = height - margin.top - margin.bottom;
+  const values = rows.flatMap(row => row.values).filter(Number.isFinite);
+  const maximum = Math.max(...values, Number.EPSILON);
+  const scale = axisScale(maximum);
+  const xStep = innerWidth / rows.length;
+  const groupWidth = Math.min(xStep * 0.76, 118);
+  const barGap = Math.min(8, groupWidth * 0.08);
+  const barWidth = Math.max(Math.min((groupWidth - barGap * (stages.length - 1)) / stages.length, 42), 12);
+  const actualGroupWidth = barWidth * stages.length + barGap * (stages.length - 1);
+  const baselineY = margin.top + innerHeight;
+  const y = value => margin.top + innerHeight - value / scale.top * innerHeight;
+  const tickDigits = scale.top < 1 ? Math.min(digits, 3) : scale.top < 10 ? Math.min(digits, 2) : scale.top < 100 ? 1 : 0;
+
+  svg.setAttribute('viewBox', `0 0 ${width} ${height}`);
+  svg.setAttribute('width', width);
+  svg.setAttribute('height', height);
+  svg.setAttribute('role', 'img');
+  svg.setAttribute('aria-label', `${title}. ${axes.y} by ${axes.x}, comparing ${stages.map(stage => stage.title).join(', ')}.`);
+  svg.append(svgNode('title', {}, title));
+
+  scale.ticks.forEach(tick => {
+    const tickY = y(tick);
+    svg.append(svgNode('line', { class: 'profile-svg-grid', x1: margin.left, x2: width - margin.right, y1: tickY, y2: tickY }));
+    svg.append(svgNode('text', { class: 'profile-svg-tick', x: margin.left - 10, y: tickY + 4, 'text-anchor': 'end' }, number(tick, tickDigits)));
+  });
+  svg.append(svgNode('line', { class: 'profile-svg-axis', x1: margin.left, x2: margin.left, y1: margin.top, y2: baselineY }));
+  svg.append(svgNode('line', { class: 'profile-svg-axis', x1: margin.left, x2: width - margin.right, y1: baselineY, y2: baselineY }));
+  svg.append(svgNode('text', { class: 'profile-svg-axis-title', x: 18, y: margin.top + innerHeight / 2, transform: `rotate(-90 18 ${margin.top + innerHeight / 2})`, 'text-anchor': 'middle' }, axes.y));
+  svg.append(svgNode('text', { class: 'profile-svg-axis-title', x: margin.left + innerWidth / 2, y: height - 12, 'text-anchor': 'middle' }, axes.x));
+
+  rows.forEach((row, rowIndex) => {
+    const center = margin.left + xStep * rowIndex + xStep / 2;
+    const startX = center - actualGroupWidth / 2;
+    row.values.forEach((value, stageIndex) => {
+      const barX = startX + stageIndex * (barWidth + barGap);
+      const barY = y(value);
+      const barHeight = Math.max(baselineY - barY, value > 0 ? 1 : 0);
+      const bar = svgNode('rect', { class: 'profile-svg-bar', x: barX, y: baselineY - barHeight, width: barWidth, height: barHeight, rx: 3 });
+      bar.style.setProperty('--bar-color', stageColor(stageIndex));
+      bar.append(svgNode('title', {}, `${row.label} · ${stages[stageIndex].title}: ${measuredValue(value, digits)} ${unit}${stageIndex ? ` · ${improvementText(row.values[0], value)}` : ''}`));
+      svg.append(bar);
+      const labelY = Math.max(baselineY - barHeight - 7, margin.top + 11);
+      svg.append(svgNode('text', { class: 'profile-svg-value', x: barX + barWidth / 2, y: labelY, 'text-anchor': 'middle' }, measuredValue(value, digits)));
     });
-    card.append(profileTable(`${workload.label} CPU results`, ['Function', 'Calls', 'Self CPU (s)', 'Inclusive CPU (s)'], rows, [1, 2, 3]));
-    card.append(profileSource(stage, workload.source_id, `Open ${workload.label} CPU text`));
-    grid.append(card);
+    appendWrappedSvgLabel(svg, center, baselineY + 22, row.label, xStep - 10);
   });
-  section.append(grid, profileNotes('CPU scope and limitations', [cpu.scope, cpu.limitation]));
+}
+
+function comparisonChart(title, description, stages, rows, unit, digits = 3, axes = { x: 'Category', y: unit }) {
+  const chart = html('article', 'profile-card profile-comparison-chart');
+  chart.append(html('h3', '', title), html('p', 'profile-meta', description), stageLegend(stages));
+  const plot = html('div', 'profile-svg-wrap');
+  const svg = svgNode('svg', { class: 'profile-svg-chart' });
+  plot.append(svg);
+  plot.drawProfileChart = () => drawProfileComparisonChart(plot, stages, rows, unit, digits, axes, title);
+  profileState.charts.push(plot);
+  profileChartObserver.observe(plot);
+  chart.append(plot);
+  return chart;
+}
+
+function metricCard(label, before, after, unit, detail, digits = 3) {
+  const card = html('article', 'profile-kpi');
+  card.append(html('p', 'profile-kpi-label', label));
+  const values = html('div', 'profile-kpi-values');
+  values.append(html('span', '', `${number(before, digits)} ${unit}`), html('span', 'profile-kpi-arrow', '→'), html('strong', '', `${number(after, digits)} ${unit}`));
+  card.append(values, html('p', `profile-kpi-change ${improvementClass(before, after)}`, improvementText(before, after)), html('p', 'profile-kpi-detail', detail));
+  return card;
+}
+
+function baselineMetricCard(label, value, unit, detail, digits = 3) {
+  const card = html('article', 'profile-kpi');
+  card.append(html('p', 'profile-kpi-label', label));
+  card.append(html('div', 'profile-kpi-values', `${measuredValue(value, digits)} ${unit}`));
+  card.append(html('p', 'profile-kpi-detail', detail));
+  return card;
+}
+
+function nextExperiment(stages) {
+  const current = stages.at(-1);
+  const topCurrent = workload(current.cpu, 'post-500-10kb')?.functions?.reduce((top, item) => !top || item.inclusive_s > top.inclusive_s ? item : top, null);
+  if (!topCurrent) return null;
+  const label = topCurrent.label.toLowerCase();
+  const finding = stages.flatMap(stage => stage.findings || []).find(item =>
+    item.title?.toLowerCase().includes(label) || item.evidence?.toLowerCase().includes(label)
+  );
+  return {
+    optimization: finding?.optimization || `Investigate ${topCurrent.label}`,
+    evidence: `${topCurrent.label} remains ${cpuSeconds(topCurrent.inclusive_s)} s inclusive CPU in the listed POST 500 functions.`,
+    validation: finding?.validation || 'Measure the same CPU, memory and benchmark workloads after the next change.'
+  };
+}
+
+function renderBaselineOverview(stage) {
+  const postPhase = phase(stage, 'post-500-10kb');
+  const postMemory = workload(stage.memory, 'post-500-10kb');
+  const search = functionResult(stage, 'post-500-10kb', 'Batch search');
+  const section = profileSection('Baseline profile', 'Starting measurements before performance optimization. These numbers establish what work was expensive and what should be tested next.', 'profile-overview');
+  const heading = html('div', 'profile-heading');
+  const verification = stage.source_verification;
+  heading.append(html('span', 'profile-badge', `${stage.cpu.condition} CPU`), html('span', `profile-badge ${verification.verified === verification.total ? '' : 'source-lock-warning'}`, `${verification.verified}/${verification.total} source files verified`));
+  section.append(heading);
+
+  const kpis = html('div', 'profile-kpis');
+  kpis.append(
+    baselineMetricCard('POST 500 · first-request CPU', postPhase?.first_request_s, 's', 'Median of 3 fresh Python processes.'),
+    baselineMetricCard('POST 500 · peak tracked memory', postMemory?.peak_mib, 'MiB', 'Original whole-test Memray scope.', 1),
+    baselineMetricCard('POST 500 · batch search hotspot', search?.calls, 'calls', `${number(search?.self_s, 3)} self CPU seconds.`, 0)
+  );
+  section.append(kpis);
+
+  const story = html('div', 'profile-story');
+  const cpu = html('article');
+  cpu.append(html('h3', '', 'CPU observation'), html('p', '', `${number(search?.calls, 0)} full-batch searches consume ${cpuSeconds(search?.self_s)} CPU s in POST 500.`));
+  const memory = html('article');
+  const batch = allocation(stage, 'post-500-10kb', 'Serialize full batch');
+  const dictionaries = allocation(stage, 'post-500-10kb', 'Run dictionary construction');
+  memory.append(html('h3', '', 'Memory observation'), html('p', '', `${number(batch, 1)} MiB serialized batch and ${number(dictionaries, 1)} MiB run dictionaries coexist at peak.`));
+  const candidate = stage.findings?.find(item => item.optimization === 'One-pass encoder');
+  const next = html('article');
+  next.append(html('h3', '', 'First optimization candidate'), html('p', '', candidate ? `${candidate.optimization} — ${candidate.validation}` : 'Remove repeated scans and duplicate payload representations, then measure again.'));
+  story.append(cpu, memory, next);
+  section.append(story);
   return section;
 }
 
-function renderMemoryProfiles(stage) {
-  const memory = stage.memory;
-  const section = profileSection('Memory profiling results', 'Peak tracked allocation · whole benchmark test · not server-only RAM or RSS.');
-  section.id = 'profile-memory';
-  section.append(html('p', 'profile-meta', memory.profiler));
-  const chart = html('article', 'profile-card memory-card');
-  chart.append(html('h3', '', 'Peak tracked allocation by workload'), html('p', 'profile-meta', 'Whole benchmark test · MiB · not server-only RAM'));
-  const bars = html('div', 'memory-bars');
-  const maximum = Math.max(...memory.workloads.map(workload => workload.peak_mib), 1);
-  memory.workloads.forEach((workload, index) => {
-    const row = html('div');
-    row.style.setProperty('--color', `var(--series-${index % 4})`);
-    const heading = html('div', 'memory-bar-heading');
-    heading.append(html('span', '', workload.label), html('strong', '', `${number(workload.peak_mib)} MiB`));
-    const track = html('div', 'memory-bar-track');
-    const fill = html('div', 'memory-bar-fill');
-    fill.style.width = `${workload.peak_mib / maximum * 100}%`;
-    track.append(fill);
-    track.setAttribute('aria-hidden', 'true');
-    row.append(heading, track);
-    bars.append(row);
-  });
-  chart.append(bars);
-  section.append(chart, html('p', '', memory.reading_guide));
-  const grid = html('div', 'profile-grid');
-  memory.workloads.forEach(workload => {
-    const card = html('article', 'profile-card memory-card');
-    const peak = html('div', 'profile-peak', number(workload.peak_mib));
-    peak.append(html('small', '', ' MiB peak'));
-    card.append(html('h3', '', workload.label), peak);
-    const allocations = html('details', 'profile-notes');
-    allocations.append(html('summary', '', 'Allocation breakdown'), profileTable(`${workload.label} allocations at peak`, ['Allocation group', 'MiB at peak'], workload.allocations.map(result => [result.label, number(result.mib)]), [1]));
-    card.append(allocations, profileSource(stage, workload.source_id, 'Download Memray recording'));
-    grid.append(card);
-  });
-  section.append(grid, profileNotes('Memory scope and limitations', [memory.scope, memory.reading_guide, memory.limitation]));
+function renderBaselineCpu(stage) {
+  const section = profileSection('Baseline CPU', 'Cold phase medians and function details, with their interpretations in the same tables.', 'profile-cpu');
+  const details = detailedCpuTables(stage);
+  details.classList.add('profile-detail-group');
+  details.open = true;
+  section.append(details);
   return section;
 }
 
-function renderProfileFindings(stage) {
-  const results = stage.finding_mode === 'results';
-  const section = profileSection(results ? 'Results of this optimization' : 'Findings → next experiments', results ? 'Profile evidence for this stage. Benchmark speed is shown in Benchmark graphs.' : 'Targets below are hypotheses, not measured improvements. ↓ = expected decrease.');
-  section.id = 'profile-findings';
-  const card = html('article', 'profile-card');
-  const rows = stage.findings.map(finding => {
-    const evidence = html('div', '', finding.evidence);
-    evidence.append(html('div', 'profile-meta', finding.evidence_type));
-    return [evidence, finding.interpretation, finding.optimization, finding.validation, finding.status];
+function renderBaselineMemory(stage) {
+  const section = profileSection('Baseline memory numbers', 'Starting measurements only. These are whole benchmark-test peaks, not server RSS.', 'profile-memory');
+  const workloadNotes = {
+    'post-500-10kb': 'Largest peak; primary POST memory target.',
+    'post-50-100kb': 'Confirms the issue across the second POST shape.',
+    'get-10kb': 'GET reference; not targeted by the encoder change.',
+    'get-100kb': 'GET reference; not targeted by the encoder change.'
+  };
+  const peaks = html('article', 'profile-card baseline-number-card');
+  peaks.append(html('h3', '', 'Peak tracked memory'));
+  peaks.append(profileTable('Baseline peak tracked memory', ['Workload', 'Peak MiB', 'Interpretation'], stage.memory.workloads.map(item => [item.label, number(item.peak_mib, 1), workloadNotes[item.id]]), [1]));
+  const targetLabels = ['Serialize full batch', 'Run dictionary construction', 'HTTP request body', 'Decoded request JSON'];
+  const driverNotes = {
+    'Serialize full batch': 'Full extra batch representation.',
+    'Run dictionary construction': 'Run dictionaries coexist with the batch.',
+    'HTTP request body': 'Input representation that remains necessary.',
+    'Decoded request JSON': 'Decoded payload that remains necessary.'
+  };
+  const allocations = workload(stage.memory, 'post-500-10kb').allocations.filter(item => targetLabels.includes(item.label));
+  const drivers = html('article', 'profile-card baseline-number-card');
+  drivers.append(html('h3', '', 'POST 500 · payload allocations relevant to encoding'));
+  drivers.append(profileTable('Baseline POST 500 encoding allocations', ['Allocation', 'MiB at peak', 'Interpretation'], allocations.map(item => [item.label, number(item.mib, 1), driverNotes[item.label]]), [1]));
+  section.append(peaks, drivers);
+  const details = html('details', 'profile-detail-group');
+  details.append(html('summary', '', 'Exact baseline memory tables and source recordings'), detailedMemoryTables(stage));
+  section.append(details);
+  return section;
+}
+
+function renderBaselineFindings(stage) {
+  const section = profileSection('Baseline observations and potential optimizations', 'Each candidate starts from a measured number. Expected improvements remain hypotheses until the next stage is measured.', 'profile-findings');
+  const list = html('div', 'profile-finding-list');
+  stage.findings.forEach(finding => {
+    const item = html('article', 'profile-finding');
+    item.append(html('span', 'profile-finding-status', finding.status));
+    item.append(html('strong', '', finding.title || finding.evidence), html('p', '', finding.evidence), html('p', '', finding.interpretation), html('p', 'profile-meta', `Candidate: ${finding.optimization} · Test: ${finding.validation}`));
+    list.append(item);
   });
-  card.append(profileTable('Evidence and optimization hypotheses', results ? ['Observed number', 'Meaning', 'Change', 'Check', 'Status'] : ['Observed number', 'Problem', 'Next change', 'Check / expected effect', 'Status'], rows));
-  section.append(card);
+  section.append(list);
+  const limitations = html('details', 'profile-detail-group');
+  limitations.append(html('summary', '', 'Baseline reporting limitations'));
+  const limitationsList = html('ul', 'profile-limitations');
+  stage.limitations.forEach(text => limitationsList.append(html('li', '', text)));
+  limitations.append(limitationsList);
+  section.append(limitations);
+  return section;
+}
+
+function renderBaseline(stage) {
+  return [renderBaselineOverview(stage), renderBaselineCpu(stage), renderBaselineMemory(stage), renderBaselineFindings(stage)];
+}
+
+function renderProfileOverview(stages) {
+  const baseline = stages[0];
+  const current = stages.at(-1);
+  const cpuBefore = phase(baseline, 'post-500-10kb')?.first_request_s;
+  const cpuAfter = phase(current, 'post-500-10kb')?.first_request_s;
+  const memoryBefore = workload(baseline.memory, 'post-500-10kb')?.peak_mib;
+  const memoryAfter = workload(current.memory, 'post-500-10kb')?.peak_mib;
+  const searchBefore = functionResult(baseline, 'post-500-10kb', 'Batch search');
+  const searchAfter = functionResult(current, 'post-500-10kb', 'Batch search');
+
+  const section = profileSection(`${baseline.title} → ${current.title}`, `${stages.length} saved profile stages compared in one view. Lower CPU and memory values are better.`, 'profile-overview');
+  const heading = html('div', 'profile-heading');
+  const verified = stages.reduce((sum, stage) => sum + stage.source_verification.verified, 0);
+  const total = stages.reduce((sum, stage) => sum + stage.source_verification.total, 0);
+  heading.append(html('span', 'profile-badge', `${current.cpu.condition} CPU`), html('span', `profile-badge ${verified === total ? '' : 'source-lock-warning'}`, `${verified}/${total} source files verified`));
+  section.append(heading);
+
+  if (stages.length > 1) {
+    const kpis = html('div', 'profile-kpis');
+    kpis.append(
+      metricCard('POST 500 · first-request CPU', cpuBefore, cpuAfter, 's', 'Median of 3 fresh Python processes.'),
+      metricCard('POST 500 · peak tracked memory', memoryBefore, memoryAfter, 'MiB', 'Original whole-test Memray scope.', 1),
+      metricCard('POST 500 · batch searches', searchBefore?.calls, searchAfter?.calls, 'calls', `${number(searchBefore?.self_s, 3)} CPU s hotspot removed.`, 0)
+    );
+    section.append(kpis);
+  }
+
+  const story = html('div', 'profile-story');
+  const changed = html('article');
+  changed.append(html('h3', '', 'What changed'), html('p', '', current.findings?.[0]?.optimization || current.title));
+  const evidence = html('article');
+  evidence.append(html('h3', '', 'Why it improved'), html('p', '', current.findings?.[0]?.interpretation || current.summary));
+  const candidate = nextExperiment(stages);
+  const next = html('article');
+  next.append(html('h3', '', 'Next optimization candidate'), html('p', '', candidate ? `${candidate.optimization} — ${candidate.evidence}` : 'Use the detailed evidence below to select the next experiment.'));
+  story.append(changed, evidence, next);
+  section.append(story);
+  return section;
+}
+
+function detailedCpuTables(stage) {
+  const baseline = stage.id === 'baseline';
+  const workloadNotes = {
+    'post-500-10kb': 'Highest request CPU; primary POST target.',
+    'post-50-100kb': 'Second POST payload shape.',
+    'get-10kb': 'GET reference; unchanged by a POST-only optimization.',
+    'get-100kb': 'GET reference; unchanged by a POST-only optimization.'
+  };
+  const hotspotNotes = {
+    'Batch search': 'Dominant request hotspot; first optimization candidate.',
+    'S3 client setup': 'Recurring setup cost; candidate after batch searching.',
+    'JSON decode': 'Smaller than batch searching.',
+    'Response encoding': 'Not a priority from this profile.'
+  };
+  const details = html('details', 'profile-stage-details');
+  details.append(html('summary', '', `${stage.title} · exact CPU tables`));
+  if (stage.cpu.phase_medians?.length) {
+    const headers = ['Workload', 'Imports', 'Startup', 'First request', 'Total'];
+    if (baseline) headers.push('Interpretation');
+    details.append(profileTable(`${stage.title} cold CPU phase medians`, headers, stage.cpu.phase_medians.map(row => [row.label, cpuSeconds(row.imports_s), cpuSeconds(row.startup_s), cpuSeconds(row.first_request_s), cpuSeconds(row.total_s), ...(baseline ? [workloadNotes[row.id] || 'Recorded for reference.'] : [])]), [1, 2, 3, 4]));
+    details.append(profileSource(stage, 'cold-cpu-summary', 'Open 12-capture summary'));
+  }
+  stage.cpu.workloads.forEach(item => {
+    details.append(html('h4', '', item.label));
+    const annotate = baseline && item.id === 'post-500-10kb';
+    const headers = ['Function', 'Calls', 'Self CPU (s)', 'Inclusive CPU (s)'];
+    if (annotate) headers.push('Interpretation');
+    details.append(profileTable(`${stage.title} ${item.label} CPU functions`, headers, item.functions.map(result => [result.label, number(result.calls, 0), cpuSeconds(result.self_s), cpuSeconds(result.inclusive_s), ...(annotate ? [hotspotNotes[result.label] || 'Recorded for reference.'] : [])]), [1, 2, 3]));
+    details.append(profileSource(stage, item.source_id, `Open ${item.label} CPU text`));
+  });
+  return details;
+}
+
+function renderCpuComparison(stages) {
+  const section = profileSection('CPU comparison', 'The main graph compares the profiled CPU used by the first complete request. Imports and startup are deliberately excluded from this graph.', 'profile-cpu');
+  const workloadIds = stages[0].cpu.phase_medians.map(item => item.id);
+  const rows = workloadIds.map(id => ({
+    label: phase(stages[0], id).label,
+    values: stages.map(stage => phase(stage, id)?.first_request_s)
+  }));
+  section.append(comparisonChart('First-request CPU by workload', 'Median of 3 fresh processes per stage · lower is better', stages, rows, 's', 3, { x: 'Workload', y: 'First-request CPU (seconds)' }));
+
+  const comparableFunctions = ['Batch search', 'S3 client setup'];
+  const hotspotRows = comparableFunctions.map(label => ({
+    label,
+    values: stages.map(stage => functionResult(stage, 'post-500-10kb', label)?.inclusive_s)
+  })).filter(row => row.values.every(Number.isFinite));
+  if (hotspotRows.length) {
+    section.append(comparisonChart('POST 500 · comparable function hotspots', 'Session 1 from each stage · lower is better', stages, hotspotRows, 's', 3, { x: 'Function', y: 'Inclusive CPU (seconds)' }));
+  }
+
+  const current = stages.at(-1);
+  const replacement = ['JSON serialization', 'Buffer writes'].map(label => functionResult(current, 'post-500-10kb', label)).filter(Boolean);
+  if (replacement.length) {
+    const note = html('div', 'profile-explanation');
+    note.append(html('strong', '', 'Replacement work is small:'));
+    note.append(html('span', '', replacement.map(item => `${item.label} ${number(item.calls, 0)} calls / ${cpuSeconds(item.inclusive_s)} s`).join(' · ')));
+    section.append(note);
+  }
+
+  const details = html('details', 'profile-detail-group');
+  details.append(html('summary', '', 'Exact CPU tables and source reports'));
+  stages.forEach(stage => details.append(detailedCpuTables(stage)));
+  section.append(details, profileNotes('How to read this CPU evidence', [stages.at(-1).cpu.reading_guide, stages.at(-1).cpu.scope, stages.at(-1).cpu.limitation]));
+  return section;
+}
+
+function detailedMemoryTables(stage) {
+  const details = html('details', 'profile-stage-details');
+  details.append(html('summary', '', `${stage.title} · exact memory tables`));
+  stage.memory.workloads.forEach(item => {
+    details.append(html('h4', '', `${item.label} · ${number(item.peak_mib)} MiB peak`));
+    details.append(profileTable(`${stage.title} ${item.label} allocations`, ['Allocation group', 'MiB at peak'], item.allocations.map(result => [result.label, number(result.mib)]), [1]));
+    details.append(profileSource(stage, item.source_id, 'Download Memray recording'));
+  });
+  return details;
+}
+
+function renderMemoryComparison(stages) {
+  const section = profileSection('Memory comparison', 'Peak tracked allocation for the original whole benchmark test. This is comparable between stages, but it is not server RSS or per-request memory.', 'profile-memory');
+  const workloadIds = stages[0].memory.workloads.map(item => item.id);
+  const rows = workloadIds.map(id => ({
+    label: workload(stages[0].memory, id).label,
+    values: stages.map(stage => workload(stage.memory, id)?.peak_mib)
+  }));
+  section.append(comparisonChart('Peak tracked memory by workload', 'Same original pytest-memray workflow · lower is better', stages, rows, 'MiB', 1, { x: 'Workload', y: 'Peak tracked memory (MiB)' }));
+
+  const drivers = [
+    ['Batch representation', ['Serialize full batch', 'Batch buffer']],
+    ['Run dictionaries', 'Run dictionary construction'],
+    ['S3 SDK setup / data', 'S3 SDK setup / data'],
+    ['HTTP request body', 'HTTP request body'],
+    ['Decoded request JSON', 'Decoded request JSON']
+  ].map(([label, aliases]) => ({
+    label,
+    values: stages.map(stage => allocation(stage, 'post-500-10kb', aliases))
+  })).filter(row => row.values.every(Number.isFinite));
+  section.append(comparisonChart('POST 500 · allocation drivers at peak', 'Diagnostic allocation groups · directly comparable labels only', stages, drivers, 'MiB', 1, { x: 'Allocation group', y: 'Allocation at peak (MiB)' }));
+
+  const details = html('details', 'profile-detail-group');
+  details.append(html('summary', '', 'Exact memory tables and source recordings'));
+  stages.forEach(stage => details.append(detailedMemoryTables(stage)));
+  section.append(details, profileNotes('How to read this memory evidence', [stages.at(-1).memory.scope, stages.at(-1).memory.reading_guide, stages.at(-1).memory.limitation]));
+  return section;
+}
+
+function renderEvidence(stages) {
+  const current = stages.at(-1);
+  const section = profileSection('Evidence and conclusion', 'Short interpretation of the latest saved stage. Exact tables, limitations and pinned source files remain available below.', 'profile-findings');
+  const list = html('div', 'profile-finding-list');
+  current.findings.forEach(finding => {
+    const item = html('article', 'profile-finding');
+    item.append(html('span', `profile-finding-status ${finding.status === 'Improved' ? 'improved' : ''}`, finding.status));
+    item.append(html('strong', '', finding.evidence), html('p', '', finding.interpretation), html('p', 'profile-meta', `${finding.optimization} · ${finding.validation}`));
+    list.append(item);
+  });
+  section.append(list);
+
+  const candidate = nextExperiment(stages);
+  if (candidate) {
+    const next = html('article', 'profile-next-experiment');
+    next.append(html('p', 'eyebrow', 'INTRODUCTION TO THE NEXT EXPERIMENT'), html('h3', '', candidate.optimization), html('p', '', candidate.evidence), html('p', 'profile-meta', candidate.validation));
+    section.append(next);
+  }
+
+  const limitations = html('details', 'profile-detail-group');
+  limitations.append(html('summary', '', 'Reporting limitations'));
+  const limitationsList = html('ul', 'profile-limitations');
+  current.limitations.forEach(text => limitationsList.append(html('li', '', text)));
+  limitations.append(limitationsList);
+
+  const sources = html('details', 'profile-sources');
+  sources.append(html('summary', '', 'Pinned reports, source hashes and calculation rules'));
+  stages.forEach(stage => {
+    sources.append(html('h3', '', stage.title));
+    sources.append(html('p', 'profile-meta', `Commit ${stage.commit.slice(0, 7)} · ${stage.review_status}`));
+    sources.append(profileTable(`${stage.title} profile metrics and pinned reports`, ['Displayed metric', 'Pinned report IDs', 'Calculation'], stage.metric_sources.map(item => [item.metric, item.source_ids.join(', '), item.rule])));
+    const links = html('ul');
+    Object.entries(stage.sources).forEach(([id, source]) => {
+      const row = html('li');
+      const fingerprint = html('code', '', `${source.path} · SHA-256 ${source.sha256.slice(0, 12)}… · ${source.size_bytes} bytes`);
+      fingerprint.title = source.sha256;
+      row.append(profileSource(stage, id, source.label), fingerprint);
+      links.append(row);
+    });
+    sources.append(links);
+  });
+  section.append(limitations, sources);
   return section;
 }
 
 function renderProfileInterpretation() {
-  const data = profileState.data;
-  const select = byId('profile-stage');
-  select.replaceChildren();
-  data.stages.forEach(stage => {
-    const option = html('option', '', `${stage.title} · ${stage.cpu.condition} CPU`);
-    option.value = stage.id;
-    select.append(option);
+  const stages = profileState.data.stages;
+  byId('profile-empty').hidden = Boolean(stages.length);
+  byId('profile-print').disabled = !stages.length;
+  if (!stages.some(stage => stage.id === profileState.stage)) profileState.stage = stages[0]?.id || '';
+  const activeIndex = Math.max(stages.findIndex(stage => stage.id === profileState.stage), 0);
+  const active = stages[activeIndex];
+  profileStageNav.replaceChildren();
+  stages.forEach((stage, index) => {
+    const button = html('button', '', `${index + 1}. ${stage.title}`);
+    button.type = 'button';
+    button.id = `profile-stage-tab-${stage.id}`;
+    button.setAttribute('role', 'tab');
+    button.setAttribute('aria-controls', 'profile-content');
+    button.setAttribute('aria-selected', String(stage.id === profileState.stage));
+    button.tabIndex = stage.id === profileState.stage ? 0 : -1;
+    button.addEventListener('click', () => {
+      profileState.stage = stage.id;
+      renderProfileInterpretation();
+      byId('profile-panel').scrollIntoView({ block: 'start' });
+    });
+    button.addEventListener('keydown', event => {
+      let next;
+      if (event.key === 'ArrowDown') next = (index + 1) % stages.length;
+      if (event.key === 'ArrowUp') next = (index - 1 + stages.length) % stages.length;
+      if (event.key === 'Home') next = 0;
+      if (event.key === 'End') next = stages.length - 1;
+      if (next == null) return;
+      event.preventDefault();
+      profileState.stage = stages[next].id;
+      renderProfileInterpretation();
+      profileStageNav.querySelector('[aria-selected="true"]')?.focus();
+    });
+    profileStageNav.append(button);
   });
-  const stage = data.stages.find(item => item.id === profileState.stage) || data.stages[0];
-  profileState.stage = stage?.id || '';
-  select.value = profileState.stage;
-  select.disabled = data.stages.length < 2;
-  byId('profile-empty').hidden = Boolean(stage);
-  updateProfileSectionNav();
-  byId('profile-download').hidden = !stage;
-  byId('profile-print').disabled = !stage;
+  updateProfileStageNav();
+  byId('profile-view-title').textContent = active ? (activeIndex === 0 ? 'Baseline profile' : `${active.title} comparison`) : 'Profile interpretation';
+  byId('profile-stage-summary').textContent = active ? (activeIndex === 0 ? 'Starting measurements and optimization hypotheses' : `${activeIndex + 1} stages on each graph · baseline through ${active.title}`) : 'No saved stages';
+  const downloads = byId('profile-downloads');
+  downloads.replaceChildren();
+  if (active) {
+    const link = html('a', 'button-link', `Download ${active.title}`);
+    link.href = active.download_url;
+    downloads.append(link);
+  }
   const content = byId('profile-content');
+  profileState.charts.forEach(plot => profileChartObserver.unobserve(plot));
+  profileState.charts = [];
   content.replaceChildren();
-  if (!stage) return;
-  byId('profile-download').href = stage.download_url;
-  const heading = html('div', 'profile-heading');
-  const verification = stage.source_verification;
-  const complete = verification.verified === verification.total;
-  heading.append(html('h2', '', `${stage.title} · profile interpretation`), html('span', 'profile-badge', `${stage.cpu.condition} CPU`), html('span', `profile-badge ${complete ? '' : 'source-lock-warning'}`, `${verification.verified}/${verification.total} source files verified`), html('p', '', `Commit ${stage.commit.slice(0, 7)} · ${stage.review_status}`));
-  const overview = html('div', 'profile-overview');
-  overview.append(html('p', '', stage.summary));
-  const limitations = html('details', 'profile-notes');
-  limitations.append(html('summary', '', 'Reporting limitations'));
-  const list = html('ul', 'profile-limitations');
-  stage.limitations.forEach(text => list.append(html('li', '', text)));
-  limitations.append(list);
-  const sources = html('details', 'profile-sources');
-  sources.append(html('summary', '', 'Pinned reports and calculation rules'));
-  sources.append(html('p', 'profile-meta', `Saved interpretation: reports/interpretations/${stage.id}.json · SHA-256 checked against every raw file. Changed or missing files are flagged; displayed numbers remain the saved interpretation.`));
-  sources.append(profileTable('Profile metrics and pinned input reports', ['Displayed metric', 'Pinned report IDs', 'Calculation'], stage.metric_sources.map(item => [item.metric, item.source_ids.join(', '), item.rule])));
-  sources.append(html('h3', '', 'Exact raw files'));
-  const links = html('ul');
-  Object.entries(stage.sources).forEach(([id, source]) => {
-    const row = html('li');
-    const fingerprint = html('code', '', `${source.path} · SHA-256 ${source.sha256.slice(0, 12)}… · ${source.size_bytes} bytes`);
-    fingerprint.title = source.sha256;
-    row.append(profileSource(stage, id, source.label), fingerprint);
-    links.append(row);
-  });
-  sources.append(links);
-  content.append(heading, overview, renderCpuProfiles(stage), renderMemoryProfiles(stage), renderProfileFindings(stage), limitations, sources);
+  if (!stages.length) return;
+  if (activeIndex === 0) {
+    content.append(...renderBaseline(active));
+  } else {
+    const comparisonStages = stages.slice(0, activeIndex + 1);
+    content.append(renderProfileOverview(comparisonStages), renderCpuComparison(comparisonStages), renderMemoryComparison(comparisonStages), renderEvidence(comparisonStages));
+  }
+  requestAnimationFrame(() => profileState.charts.forEach(plot => plot.drawProfileChart()));
 }
 
 async function refreshProfiles() {
@@ -284,17 +676,13 @@ async function refreshProfiles() {
     }
     byId('profile-warnings').textContent = data.warnings.join(' · ');
     byId('profile-warnings').hidden = !data.warnings.length;
-    if (!byId('profile-panel').hidden) byId('status').textContent = `Saved findings · ${data.stages.length} stage${data.stages.length === 1 ? '' : 's'} · checks every 3s`;
+    if (!byId('profile-panel').hidden) byId('status').textContent = `Profile comparison · ${data.stages.length} stage${data.stages.length === 1 ? '' : 's'} · checks every 3s`;
   } catch (error) {
     byId('profile-warnings').textContent = `Could not load saved interpretations. Existing results are retained. ${error.message}`;
     byId('profile-warnings').hidden = false;
   } finally { profileState.pending = false; }
 }
 
-byId('profile-stage').addEventListener('change', () => {
-  profileState.stage = byId('profile-stage').value;
-  renderProfileInterpretation();
-});
 byId('profile-print').addEventListener('click', () => window.print());
 selectDashboardView(location.hash === '#profiles' ? 'profiles' : 'benchmarks');
 refreshProfiles();

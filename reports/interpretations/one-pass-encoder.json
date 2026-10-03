@@ -1,6 +1,7 @@
 {
   "schema_version": 1,
   "id": "one-pass-encoder",
+  "order": 1,
   "title": "One-pass encoder",
   "commit": "8f5b53468f20d554cdb0c279c629eafa3b96ee85",
   "application_sha256": "23e3e78b5e057418c6655798304ba291cf465c49f28a31b144ba473c9a35a54a",
