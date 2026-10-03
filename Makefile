@@ -53,7 +53,7 @@ test: test-setup
 # Run performance benchmarks
 benchmark: test-setup
 	@echo "Running performance benchmarks..."
-	RUN_HANDLER_ENV=test poetry run pytest tests/benchmarks/test_run_performance.py -v --benchmark-save=baseline --benchmark-compare
+	RUN_HANDLER_ENV=test poetry run pytest tests/benchmarks/test_run_performance.py -v --benchmark-save=baseline --benchmark-save-data --benchmark-compare
 
 # Run memory profiling; retain each run in a unique output directory
 memprofile: test-setup
