@@ -274,7 +274,7 @@ download bodies consumed by the application; they exclude headers/TCP framing.
 |---|---|---|---|
 | **Corrected baseline — no performance optimizations** | Original timing/memory workflows and supplementary CPU time/profiles/diagnostics for the four supplied scenarios | Establish the starting numbers after the separate correctness fix | Collected on `bdf1239`; primary numbers: `measurements/baseline-bdf1239-gxSv1A8k/primary-summary.csv`; supplementary numbers: `measurements/baseline-bdf1239-gxSv1A8k/supplementary/20261003T011935.704701Z/summary.csv` |
 | **Connection pooling** | POST/GET latency, new connections and peak open connections | Fewer new connections and lower request latency; bounded open connections | Not measured |
-| **One-pass encoding** | Original POST benchmark latency; cold profiled first-request CPU; original Memray peak | Less repeated work, lower memory use, and faster ingestion | POST 500 median **2.107 → 0.580 s (−72.5%)**; POST 50 **0.620 → 0.381 s (−38.5%)**. Cold POST 500 first-request CPU **1.771 → 0.722 s (−59.2%)**. POST 500 peak **191.401 → 171.241 MiB (−10.5%)**; POST 50 **132.352 → 118.343 MiB (−10.6%)**. GET code unchanged. |
+| **One-pass encoding** | Original POST benchmark latency; cold profiled first-request CPU; original Memray peak | Less repeated work, lower memory use, and faster ingestion | Clean commit `8f5b534`: POST 500 median **2.107 → 0.570 s (−72.9%)**; POST 50 **0.620 → 0.360 s (−41.9%)**. Cold POST 500 first-request CPU **1.771 → 0.725 s (−59.0%)**. POST 500 peak **191.401 → 171.241 MiB (−10.5%)**; POST 50 **132.352 → 117.343 MiB (−11.3%)**. GET code unchanged. |
 | **Bulk database writes** | POST latency, ingestion throughput and database command count | Fewer database commands and faster batch ingestion | Not measured |
 | **One S3 read per run** | GET latency, S3 request count and downloaded bytes | Fewer S3 requests and faster retrieval; measure the byte-transfer tradeoff | Not measured |
 
@@ -283,10 +283,10 @@ workflows (`make benchmark`, `make memprofile`, cold `make measure --passes cpu`
 at each stage. Keep other harness passes optional and separate. Record expected
 effects before testing; do not invent expected percentages.
 
-One-pass reports: `.benchmarks/Darwin-CPython-3.11-64bit/0002_baseline.json`,
-`profiles/memory/20261003T061452Z-aBejij2X/`, and
-`measurements/20261003T061543.624262Z/summary.csv` with matching raw Yappi
-files under `profiles/cpu/20261003T061543.624262Z/`. The dashboard labels the
+One-pass reports: `.benchmarks/Darwin-CPython-3.11-64bit/0003_baseline.json`,
+`profiles/memory/20261003T183206Z-4gQXLF1M/`, and
+`measurements/20261003T183247.835556Z/summary.csv` with matching raw Yappi
+files under `profiles/cpu/20261003T183247.835556Z/`. The dashboard labels the
 benchmark report **One-pass encoder** and pins the CPU/memory sources in
 `reports/interpretations/one-pass-encoder.json`. This is one benchmark report
 per stage, not a confidence interval; do not attribute small GET timing shifts

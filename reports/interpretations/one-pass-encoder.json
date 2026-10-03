@@ -2,10 +2,10 @@
   "schema_version": 1,
   "id": "one-pass-encoder",
   "title": "One-pass encoder",
-  "commit": "bdf123994e632380fe5a76e2e998ce7700c8ece9",
+  "commit": "8f5b53468f20d554cdb0c279c629eafa3b96ee85",
   "application_sha256": "23e3e78b5e057418c6655798304ba291cf465c49f28a31b144ba473c9a35a54a",
-  "review_status": "Measured · uncommitted optimization",
-  "summary": "Cold POST 500 first-request CPU: 1.771 → 0.722 s (−59.2%). Original Memray peak: 191.401 → 171.241 MiB (−10.5%). Batch searches: 1,500 → 0.",
+  "review_status": "Measured · clean optimization commit",
+  "summary": "Clean commit 8f5b534. Cold POST 500 first-request CPU: 1.771 → 0.725 s (-59.0%). Original Memray peak: 191.401 → 171.241 MiB (-10.5%). Batch searches: 1,500 → 0.",
   "cpu": {
     "profiler": "Yappi 1.7.6 · CPU clock · built-ins enabled",
     "condition": "Cold start",
@@ -30,29 +30,29 @@
             "label": "POST handler",
             "function": "create_runs",
             "calls": 1,
-            "self_s": 0.025894,
-            "inclusive_s": 0.128577
+            "self_s": 0.026249,
+            "inclusive_s": 0.132074
           },
           {
             "label": "JSON serialization",
             "function": "dumps",
             "calls": 6000,
-            "self_s": 0.008701,
-            "inclusive_s": 0.008701
+            "self_s": 0.008844,
+            "inclusive_s": 0.008844
           },
           {
             "label": "Buffer writes",
             "function": "<method 'write' of '_io.BytesIO' objects>",
             "calls": 10001,
-            "self_s": 0.011844,
-            "inclusive_s": 0.011844
+            "self_s": 0.012019,
+            "inclusive_s": 0.012019
           },
           {
             "label": "S3 client setup",
             "function": "get_s3_client",
             "calls": 1,
-            "self_s": 0.000018,
-            "inclusive_s": 0.161029
+            "self_s": 0.000019,
+            "inclusive_s": 0.16657
           }
         ]
       },
@@ -72,29 +72,29 @@
             "label": "POST handler",
             "function": "create_runs",
             "calls": 1,
-            "self_s": 0.00418,
-            "inclusive_s": 0.063934
+            "self_s": 0.003648,
+            "inclusive_s": 0.058409
           },
           {
             "label": "JSON serialization",
             "function": "dumps",
             "calls": 600,
-            "self_s": 0.004175,
-            "inclusive_s": 0.004175
+            "self_s": 0.003461,
+            "inclusive_s": 0.003461
           },
           {
             "label": "Buffer writes",
             "function": "<method 'write' of '_io.BytesIO' objects>",
             "calls": 1001,
-            "self_s": 0.004532,
-            "inclusive_s": 0.004532
+            "self_s": 0.003265,
+            "inclusive_s": 0.003265
           },
           {
             "label": "S3 client setup",
             "function": "get_s3_client",
             "calls": 1,
-            "self_s": 0.00002,
-            "inclusive_s": 0.181479
+            "self_s": 0.000016,
+            "inclusive_s": 0.161998
           }
         ]
       },
@@ -107,29 +107,29 @@
             "label": "S3 client setup",
             "function": "get_s3_client",
             "calls": 1,
-            "self_s": 0.000013,
-            "inclusive_s": 0.16175
+            "self_s": 0.000014,
+            "inclusive_s": 0.164797
           },
           {
             "label": "S3 field read",
             "function": "fetch_from_s3",
             "calls": 3,
-            "self_s": 0.000087,
-            "inclusive_s": 0.044258
+            "self_s": 0.000085,
+            "inclusive_s": 0.045324
           },
           {
             "label": "JSON decode",
             "function": "JSONDecoder.raw_decode",
             "calls": 14,
-            "self_s": 0.040773,
-            "inclusive_s": 0.040773
+            "self_s": 0.041279,
+            "inclusive_s": 0.041279
           },
           {
             "label": "Response encoding",
             "function": "jsonable_encoder",
             "calls": 631,
-            "self_s": 0.005043,
-            "inclusive_s": 0.013368
+            "self_s": 0.005012,
+            "inclusive_s": 0.013321
           }
         ]
       },
@@ -142,29 +142,29 @@
             "label": "S3 client setup",
             "function": "get_s3_client",
             "calls": 1,
-            "self_s": 0.000016,
-            "inclusive_s": 0.161343
+            "self_s": 0.000013,
+            "inclusive_s": 0.162442
           },
           {
             "label": "S3 field read",
             "function": "fetch_from_s3",
             "calls": 3,
-            "self_s": 0.000086,
-            "inclusive_s": 0.045833
+            "self_s": 0.000084,
+            "inclusive_s": 0.044662
           },
           {
             "label": "JSON decode",
             "function": "JSONDecoder.raw_decode",
             "calls": 14,
-            "self_s": 0.041558,
-            "inclusive_s": 0.041558
+            "self_s": 0.041534,
+            "inclusive_s": 0.041534
           },
           {
             "label": "Response encoding",
             "function": "jsonable_encoder",
             "calls": 6157,
-            "self_s": 0.050223,
-            "inclusive_s": 0.132642
+            "self_s": 0.049517,
+            "inclusive_s": 0.130532
           }
         ]
       }
@@ -173,34 +173,34 @@
       {
         "id": "post-500-10kb",
         "label": "POST 500 × 10 KB",
-        "total_s": 4.292627,
-        "imports_s": 3.327455,
-        "startup_s": 0.23339,
-        "first_request_s": 0.721901
+        "total_s": 4.247522,
+        "imports_s": 3.296878,
+        "startup_s": 0.231533,
+        "first_request_s": 0.725392
       },
       {
         "id": "post-50-100kb",
         "label": "POST 50 × 100 KB",
-        "total_s": 4.171463,
-        "imports_s": 3.387879,
-        "startup_s": 0.234233,
-        "first_request_s": 0.549351
+        "total_s": 4.17605,
+        "imports_s": 3.392669,
+        "startup_s": 0.236134,
+        "first_request_s": 0.547247
       },
       {
         "id": "get-10kb",
         "label": "GET 10 KB",
-        "total_s": 3.914579,
-        "imports_s": 3.328121,
-        "startup_s": 0.234021,
-        "first_request_s": 0.352437
+        "total_s": 3.898648,
+        "imports_s": 3.320158,
+        "startup_s": 0.231273,
+        "first_request_s": 0.345922
       },
       {
         "id": "get-100kb",
         "label": "GET 100 KB",
-        "total_s": 4.08525,
-        "imports_s": 3.378388,
-        "startup_s": 0.234233,
-        "first_request_s": 0.469322
+        "total_s": 4.024188,
+        "imports_s": 3.323539,
+        "startup_s": 0.232222,
+        "first_request_s": 0.466622
       }
     ]
   },
@@ -218,11 +218,11 @@
         "allocations": [
           {
             "label": "S3 SDK setup / data",
-            "mib": 44.04315185546875
+            "mib": 43.04315185546875
           },
           {
             "label": "Benchmark-generated test data",
-            "mib": 38.675048828125
+            "mib": 36.675048828125
           },
           {
             "label": "Unattributed (no Python stack)",
@@ -242,11 +242,11 @@
           },
           {
             "label": "Model validation",
-            "mib": 5.673004150390625
+            "mib": 6.673004150390625
           },
           {
             "label": "Other tracked allocations",
-            "mib": 3.1360883712768555
+            "mib": 5.1360883712768555
           },
           {
             "label": "Run dictionary construction",
@@ -257,7 +257,7 @@
       {
         "id": "post-50-100kb",
         "label": "POST 50 × 100 KB",
-        "peak_mib": 118.34284591674805,
+        "peak_mib": 117.34284591674805,
         "source_id": "memory-post-50-100kb",
         "allocations": [
           {
@@ -278,7 +278,7 @@
           },
           {
             "label": "Decoded request JSON",
-            "mib": 14.714752197265625
+            "mib": 13.714752197265625
           },
           {
             "label": "Benchmark-generated test data",
@@ -363,7 +363,7 @@
       "status": "Improved"
     },
     {
-      "evidence": "1.771 → 0.722 CPU s · first POST 500 (−59.2%)",
+      "evidence": "1.771 → 0.725 CPU s · first POST 500 (-59.0%)",
       "interpretation": "The cold request phase uses less CPU; imports remain separate.",
       "optimization": "One-pass offset recording",
       "validation": "Median of 3 fresh processes per stage.",
@@ -371,8 +371,8 @@
       "status": "Improved"
     },
     {
-      "evidence": "191.401 → 171.241 MiB · POST 500 (−10.5%)",
-      "interpretation": "Lower whole-test tracked memory peak; POST 50 also fell 10.6%.",
+      "evidence": "191.401 → 171.241 MiB · POST 500 (-10.5%)",
+      "interpretation": "Lower whole-test tracked memory peak; POST 50 also fell 11.3%.",
       "optimization": "Buffer encoding without run-dict list",
       "validation": "Same original pytest-memray scope; GET peaks unchanged.",
       "evidence_type": "Original Memray profiles",
@@ -388,7 +388,7 @@
     }
   ],
   "limitations": [
-    "This stage is uncommitted. The base Git revision is bdf1239; the CPU capture records the application source fingerprint.",
+    "Profiled application code is clean commit 8f5b534; all 12 CPU result files record dirty_worktree=false and the same application fingerprint.",
     "One original benchmark report per stage; its POST win is shown on the separate Benchmark graphs tab, not inferred from profiler timing.",
     "CPU uses fresh processes, zero warm-up and a profiler; PostgreSQL/MinIO and OS caches stayed running.",
     "Memory is the original whole benchmark-test Memray capture, not server-only RAM. Allocation-group labels are diagnostic.",
@@ -397,81 +397,81 @@
   "sources": {
     "cold-cpu-summary": {
       "label": "12 cold CPU captures · summary",
-      "path": "measurements/20261003T061543.624262Z/summary.csv",
-      "sha256": "91b35ef7f4bf3baa9b0e768b11ba754faff5a1752b0087014ad54ea12c535e1b",
-      "size_bytes": 3453
+      "path": "measurements/20261003T183247.835556Z/summary.csv",
+      "sha256": "b5ad690a93142804b29a52fabbc3eecc3002899a608279979e12ada53a4144e8",
+      "size_bytes": 3537
     },
     "cpu-post-500-10kb-s1": {
       "label": "POST 500 × 10 KB · cold CPU text · session 1",
-      "path": "profiles/cpu/20261003T061543.624262Z/session-1/post-500-10kb/cpu.txt",
-      "sha256": "c503def625dd5839ddc3a6271bd81bab15be60d6941119cbac34ae0b3f4b99c0",
+      "path": "profiles/cpu/20261003T183247.835556Z/session-1/post-500-10kb/cpu.txt",
+      "sha256": "19aea1b1b88e029d1044a727fe1cede7caf2724e7f793fdea5bc48063cd37f79",
       "size_bytes": 499691
     },
     "cpu-post-500-10kb-s1-binary": {
       "label": "POST 500 × 10 KB · cold CPU pstat · session 1",
-      "path": "profiles/cpu/20261003T061543.624262Z/session-1/post-500-10kb/cpu.pstat",
-      "sha256": "562f9415f7fee34d0af5fd6d001221267e51794f4bbc0a4d1d565a2c25dc7d77",
-      "size_bytes": 1169035
+      "path": "profiles/cpu/20261003T183247.835556Z/session-1/post-500-10kb/cpu.pstat",
+      "sha256": "a0e41c64a983b41e96082d553c71705d2e96aa239a7aed4424626ccd2d1cf889",
+      "size_bytes": 1168941
     },
     "memory-post-500-10kb": {
       "label": "POST 500 × 10 KB · original Memray binary",
-      "path": "profiles/memory/20261003T061452Z-aBejij2X/d83aebed653f4b238a76cb0ce1defd8d-tests-benchmarks-test_run_performance.py-test_create_batch_runs_500_10kb.bin",
-      "sha256": "cc7899f69377129058090da3b818bd3384290ef2ead78257545e03351366f1fa",
-      "size_bytes": 58554
+      "path": "profiles/memory/20261003T183206Z-4gQXLF1M/84ae3777db6e46eeaa4c8c62b7cb2746-tests-benchmarks-test_run_performance.py-test_create_batch_runs_500_10kb.bin",
+      "sha256": "8f6a3a5afd14098519f546892b1c9ffda23c1f5db76edf018d101d4f80008e65",
+      "size_bytes": 57590
     },
     "cpu-post-50-100kb-s1": {
       "label": "POST 50 × 100 KB · cold CPU text · session 1",
-      "path": "profiles/cpu/20261003T061543.624262Z/session-1/post-50-100kb/cpu.txt",
-      "sha256": "ca16fa090aa5a45c3ae23a0df2f3985777232eb3f9d29834f852d215f31470a9",
+      "path": "profiles/cpu/20261003T183247.835556Z/session-1/post-50-100kb/cpu.txt",
+      "sha256": "51eb03ee279fe9f943648bad9df2d15c251f6beef208641af7544e44786da9f8",
       "size_bytes": 499543
     },
     "cpu-post-50-100kb-s1-binary": {
       "label": "POST 50 × 100 KB · cold CPU pstat · session 1",
-      "path": "profiles/cpu/20261003T061543.624262Z/session-1/post-50-100kb/cpu.pstat",
-      "sha256": "b4f517b339802cc4c7f7c6bf61b7dc3d346f8d7e7a88b11593bdddca13efd0be",
+      "path": "profiles/cpu/20261003T183247.835556Z/session-1/post-50-100kb/cpu.pstat",
+      "sha256": "4508d0225aec40049365356453fde104a97161e18c97adb21babc596b3d93646",
       "size_bytes": 1168776
     },
     "memory-post-50-100kb": {
       "label": "POST 50 × 100 KB · original Memray binary",
-      "path": "profiles/memory/20261003T061452Z-aBejij2X/d83aebed653f4b238a76cb0ce1defd8d-tests-benchmarks-test_run_performance.py-test_create_batch_runs_50_100kb.bin",
-      "sha256": "df47a5ef78597f95a76c5509dfc65625629bf5b014ed8dd965cf9ad28054174d",
-      "size_bytes": 42011
+      "path": "profiles/memory/20261003T183206Z-4gQXLF1M/84ae3777db6e46eeaa4c8c62b7cb2746-tests-benchmarks-test_run_performance.py-test_create_batch_runs_50_100kb.bin",
+      "sha256": "77011c433e1e72b81f22ac4d74614a0a70d123c75af03af33a908021400e7b09",
+      "size_bytes": 41194
     },
     "cpu-get-10kb-s1": {
       "label": "GET 10 KB · cold CPU text · session 1",
-      "path": "profiles/cpu/20261003T061543.624262Z/session-1/get-10kb/cpu.txt",
-      "sha256": "9fa04be82091d07c867de0f58b61ad956b77cb562ac2632ab56ddeb84fcca291",
+      "path": "profiles/cpu/20261003T183247.835556Z/session-1/get-10kb/cpu.txt",
+      "sha256": "9f138c966d948dc8742c09fbd13a673526cb030a99f30e55e3ea0f38faa0a5da",
       "size_bytes": 500283
     },
     "cpu-get-10kb-s1-binary": {
       "label": "GET 10 KB · cold CPU pstat · session 1",
-      "path": "profiles/cpu/20261003T061543.624262Z/session-1/get-10kb/cpu.pstat",
-      "sha256": "13c91b0d1e9028280b0b37ec0ba5c64402cc3beb364292fe01700985a7d42979",
+      "path": "profiles/cpu/20261003T183247.835556Z/session-1/get-10kb/cpu.pstat",
+      "sha256": "7f38fa0c8ba0ca40e1db088c4cd3104b609405eb0e6465f5d4372f3c25eb15f6",
       "size_bytes": 1167689
     },
     "memory-get-10kb": {
       "label": "GET 10 KB · original Memray binary",
-      "path": "profiles/memory/20261003T061452Z-aBejij2X/d83aebed653f4b238a76cb0ce1defd8d-tests-benchmarks-test_run_performance.py-test_get_run_10kb.bin",
-      "sha256": "a6a6574f42c17091a1b872aeb42d715c66f0d04bdb6796db7228495cfd5ef958",
-      "size_bytes": 37518
+      "path": "profiles/memory/20261003T183206Z-4gQXLF1M/84ae3777db6e46eeaa4c8c62b7cb2746-tests-benchmarks-test_run_performance.py-test_get_run_10kb.bin",
+      "sha256": "484aa937552f1f11a596f77533c23bdeedbc9da28a1aa30f8adebe49383ee00f",
+      "size_bytes": 37266
     },
     "cpu-get-100kb-s1": {
       "label": "GET 100 KB · cold CPU text · session 1",
-      "path": "profiles/cpu/20261003T061543.624262Z/session-1/get-100kb/cpu.txt",
-      "sha256": "ded02b62e0a964d1eb33cd243229196151f8d24fac2c8a9f4e4d6d86b7c07716",
+      "path": "profiles/cpu/20261003T183247.835556Z/session-1/get-100kb/cpu.txt",
+      "sha256": "603cdaa4c7cf58d1e9a37c4cb68833c0a4868dac26a3dc55a81822e12431e921",
       "size_bytes": 500431
     },
     "cpu-get-100kb-s1-binary": {
       "label": "GET 100 KB · cold CPU pstat · session 1",
-      "path": "profiles/cpu/20261003T061543.624262Z/session-1/get-100kb/cpu.pstat",
-      "sha256": "85e34a521ecd4c26cb594994827f82e129c92c249366e9c67d0f36b6c06a9ec1",
+      "path": "profiles/cpu/20261003T183247.835556Z/session-1/get-100kb/cpu.pstat",
+      "sha256": "1d1dcf6178103fccac86609ed72ef44d5b014ec14d73d2b0c30ccd04094e4d2d",
       "size_bytes": 1168388
     },
     "memory-get-100kb": {
       "label": "GET 100 KB · original Memray binary",
-      "path": "profiles/memory/20261003T061452Z-aBejij2X/d83aebed653f4b238a76cb0ce1defd8d-tests-benchmarks-test_run_performance.py-test_get_run_100kb.bin",
-      "sha256": "507c752454c9ec87fe478ef188c39f1c57f59d92fa2bc880664ca3b808b9d2af",
-      "size_bytes": 37569
+      "path": "profiles/memory/20261003T183206Z-4gQXLF1M/84ae3777db6e46eeaa4c8c62b7cb2746-tests-benchmarks-test_run_performance.py-test_get_run_100kb.bin",
+      "sha256": "f7c95cade36433891815c61fd21665655f7c8e0a06801c7be580b2c68b280a10",
+      "size_bytes": 37508
     }
   },
   "metric_sources": [
