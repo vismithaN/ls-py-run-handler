@@ -1,0 +1,524 @@
+{
+  "schema_version": 1,
+  "id": "baseline",
+  "title": "Baseline",
+  "commit": "bdf123994e632380fe5a76e2e998ce7700c8ece9",
+  "review_status": "Hypotheses · not tested",
+  "summary": "Cold CPU: imports take 3.38–3.42 s; the first POST 500 spends 1.035 s searching batch bytes. Memory: POST 500 peak is 191.401 MiB.",
+  "cpu": {
+    "profiler": "Yappi 1.7.6 · CPU clock · built-ins enabled",
+    "condition": "Cold start",
+    "procedure": "3 fresh Python processes per workload · 1 request each · 0 warm-ups. Phase values are medians; function tables show session 1.",
+    "scope": "Yappi starts before application/dependency imports and stops after the first complete API response. Includes imports, event-loop/application/client startup, and that response. Excludes worker/Python/Yappi bootstrap, prepared payloads, GET seeding, verification and shutdown. PostgreSQL and MinIO remain running with their caches.",
+    "reading_guide": "Phase CPU: median of 3 processes. Function CPU: session 1, one full cold capture. Self = function only; inclusive = function + callees. Inclusive rows overlap.",
+    "limitation": "Profiler overhead is included. These CPU seconds are not unprofiled request latency. Phase medians are computed independently and need not sum exactly. This is a cold application process, not a cold machine.",
+    "workloads": [
+      {
+        "id": "post-500-10kb",
+        "label": "POST 500 × 10 KB",
+        "source_id": "cpu-post-500-10kb-s1",
+        "functions": [
+          {
+            "label": "Batch search",
+            "function": "<method 'find' of 'bytes' objects>",
+            "calls": 1500,
+            "self_s": 1.034662,
+            "inclusive_s": 1.034662
+          },
+          {
+            "label": "S3 client setup",
+            "function": "get_s3_client",
+            "calls": 1,
+            "self_s": 0.000018,
+            "inclusive_s": 0.161089
+          },
+          {
+            "label": "JSON decode",
+            "function": "JSONDecoder.raw_decode",
+            "calls": 15,
+            "self_s": 0.078197,
+            "inclusive_s": 0.078199
+          },
+          {
+            "label": "Response encoding",
+            "function": "jsonable_encoder",
+            "calls": 505,
+            "self_s": 0.004593,
+            "inclusive_s": 0.012278
+          }
+        ]
+      },
+      {
+        "id": "post-50-100kb",
+        "label": "POST 50 × 100 KB",
+        "source_id": "cpu-post-50-100kb-s1",
+        "functions": [
+          {
+            "label": "Batch search",
+            "function": "<method 'find' of 'bytes' objects>",
+            "calls": 150,
+            "self_s": 0.211245,
+            "inclusive_s": 0.211245
+          },
+          {
+            "label": "S3 client setup",
+            "function": "get_s3_client",
+            "calls": 1,
+            "self_s": 0.000016,
+            "inclusive_s": 0.166582
+          },
+          {
+            "label": "JSON decode",
+            "function": "JSONDecoder.raw_decode",
+            "calls": 15,
+            "self_s": 0.07997,
+            "inclusive_s": 0.079973
+          },
+          {
+            "label": "Response encoding",
+            "function": "jsonable_encoder",
+            "calls": 55,
+            "self_s": 0.000548,
+            "inclusive_s": 0.001412
+          }
+        ]
+      },
+      {
+        "id": "get-10kb",
+        "label": "GET 10 KB",
+        "source_id": "cpu-get-10kb-s1",
+        "functions": [
+          {
+            "label": "S3 client setup",
+            "function": "get_s3_client",
+            "calls": 1,
+            "self_s": 0.000017,
+            "inclusive_s": 0.166577
+          },
+          {
+            "label": "S3 field read",
+            "function": "fetch_from_s3",
+            "calls": 3,
+            "self_s": 0.00009,
+            "inclusive_s": 0.045397
+          },
+          {
+            "label": "JSON decode",
+            "function": "JSONDecoder.raw_decode",
+            "calls": 14,
+            "self_s": 0.041406,
+            "inclusive_s": 0.041409
+          },
+          {
+            "label": "Response encoding",
+            "function": "jsonable_encoder",
+            "calls": 631,
+            "self_s": 0.0051,
+            "inclusive_s": 0.013479
+          }
+        ]
+      },
+      {
+        "id": "get-100kb",
+        "label": "GET 100 KB",
+        "source_id": "cpu-get-100kb-s1",
+        "functions": [
+          {
+            "label": "S3 client setup",
+            "function": "get_s3_client",
+            "calls": 1,
+            "self_s": 0.000015,
+            "inclusive_s": 0.163503
+          },
+          {
+            "label": "Response encoding",
+            "function": "jsonable_encoder",
+            "calls": 6157,
+            "self_s": 0.049677,
+            "inclusive_s": 0.131198
+          },
+          {
+            "label": "S3 field read",
+            "function": "fetch_from_s3",
+            "calls": 3,
+            "self_s": 0.000084,
+            "inclusive_s": 0.045864
+          },
+          {
+            "label": "JSON decode",
+            "function": "JSONDecoder.raw_decode",
+            "calls": 14,
+            "self_s": 0.045512,
+            "inclusive_s": 0.045516
+          }
+        ]
+      }
+    ],
+    "phase_medians": [
+      {
+        "id": "post-500-10kb",
+        "label": "POST 500 × 10 KB",
+        "total_s": 5.396897,
+        "imports_s": 3.38943,
+        "startup_s": 0.232473,
+        "first_request_s": 1.770919
+      },
+      {
+        "id": "post-50-100kb",
+        "label": "POST 50 × 100 KB",
+        "total_s": 4.516401,
+        "imports_s": 3.421856,
+        "startup_s": 0.23607,
+        "first_request_s": 0.77672
+      },
+      {
+        "id": "get-10kb",
+        "label": "GET 10 KB",
+        "total_s": 3.997455,
+        "imports_s": 3.416192,
+        "startup_s": 0.233585,
+        "first_request_s": 0.350064
+      },
+      {
+        "id": "get-100kb",
+        "label": "GET 100 KB",
+        "total_s": 4.083051,
+        "imports_s": 3.381254,
+        "startup_s": 0.237707,
+        "first_request_s": 0.471408
+      }
+    ]
+  },
+  "memory": {
+    "profiler": "Memray 1.17.2 via the original pytest-memray workflow",
+    "scope": "Peak tracked allocation for the entire benchmark test function: includes test-data generation, repeated benchmark execution and GET seeding. Client-fixture creation and earlier module imports are outside capture. Native stack capture and Python-allocator tracing were disabled, as in the original workflow.",
+    "reading_guide": "Allocation groups sum to the peak. MiB = bytes / 1,048,576. Not cumulative allocation volume.",
+    "limitation": "Not server-only RAM, RSS, per-request memory or evidence of a leak. Some allocations have no Python stack and remain unattributed. GET peaks occur at different execution points; cache / native buffer state and test order can affect them. The 100 KB GET having a lower peak does not establish lower memory requirements.",
+    "workloads": [
+      {
+        "id": "post-500-10kb",
+        "label": "POST 500 × 10 KB",
+        "peak_mib": 191.40101718902588,
+        "source_id": "memory-post-500-10kb",
+        "allocations": [
+          {
+            "label": "S3 SDK setup / data",
+            "mib": 44.988290786743164
+          },
+          {
+            "label": "Benchmark-generated test data",
+            "mib": 38.675048828125
+          },
+          {
+            "label": "Unattributed (no Python stack)",
+            "mib": 32.041733741760254
+          },
+          {
+            "label": "Serialize full batch",
+            "mib": 32.00003147125244
+          },
+          {
+            "label": "HTTP request body",
+            "mib": 16.477140426635742
+          },
+          {
+            "label": "Decoded request JSON",
+            "mib": 12.67315673828125
+          },
+          {
+            "label": "Model validation",
+            "mib": 6.673004150390625
+          },
+          {
+            "label": "Run dictionary construction",
+            "mib": 5.67315673828125
+          },
+          {
+            "label": "Other tracked allocations",
+            "mib": 2.1994543075561523
+          }
+        ]
+      },
+      {
+        "id": "post-50-100kb",
+        "label": "POST 50 × 100 KB",
+        "peak_mib": 132.3521022796631,
+        "source_id": "memory-post-50-100kb",
+        "allocations": [
+          {
+            "label": "Unattributed (no Python stack)",
+            "mib": 32.01673984527588
+          },
+          {
+            "label": "Serialize full batch",
+            "mib": 32.00003147125244
+          },
+          {
+            "label": "S3 SDK setup / data",
+            "mib": 27.899307250976562
+          },
+          {
+            "label": "HTTP request body",
+            "mib": 16.547521591186523
+          },
+          {
+            "label": "Benchmark-generated test data",
+            "mib": 8.714752197265625
+          },
+          {
+            "label": "Decoded request JSON",
+            "mib": 7.714752197265625
+          },
+          {
+            "label": "Run dictionary construction",
+            "mib": 3.714752197265625
+          },
+          {
+            "label": "Model validation",
+            "mib": 3.714752197265625
+          },
+          {
+            "label": "Other tracked allocations",
+            "mib": 0.029493331909179688
+          }
+        ]
+      },
+      {
+        "id": "get-10kb",
+        "label": "GET 10 KB",
+        "peak_mib": 14.624557495117188,
+        "source_id": "memory-get-10kb",
+        "allocations": [
+          {
+            "label": "Decode retrieved field JSON",
+            "mib": 8
+          },
+          {
+            "label": "S3 SDK setup / data",
+            "mib": 6.514636039733887
+          },
+          {
+            "label": "Unattributed (no Python stack)",
+            "mib": 0.07960224151611328
+          },
+          {
+            "label": "Other tracked allocations",
+            "mib": 0.0209808349609375
+          },
+          {
+            "label": "Benchmark-generated test data",
+            "mib": 0.00933837890625
+          }
+        ]
+      },
+      {
+        "id": "get-100kb",
+        "label": "GET 100 KB",
+        "peak_mib": 7.125877380371094,
+        "source_id": "memory-get-100kb",
+        "allocations": [
+          {
+            "label": "S3 SDK setup / data",
+            "mib": 6.511700630187988
+          },
+          {
+            "label": "Unattributed (no Python stack)",
+            "mib": 0.5171022415161133
+          },
+          {
+            "label": "Benchmark-generated test data",
+            "mib": 0.0742950439453125
+          },
+          {
+            "label": "Other tracked allocations",
+            "mib": 0.022779464721679688
+          }
+        ]
+      }
+    ]
+  },
+  "findings": [
+    {
+      "title": "Cold application imports",
+      "evidence": "3.38–3.42 CPU s · 63–85% of cold total",
+      "interpretation": "Fresh-process imports dominate captured CPU.",
+      "optimization": "Startup watchlist",
+      "validation": "Track import, startup and first-request CPU separately after each change.",
+      "evidence_type": "Cold CPU phase medians",
+      "status": "Observed"
+    },
+    {
+      "title": "Repeated batch searches",
+      "evidence": "1,500 searches · 1.035 self CPU s / first POST 500",
+      "interpretation": "Repeated full-batch scanning.",
+      "optimization": "One-pass encoder",
+      "validation": "Searches → 0; compare cold first-request CPU and POST latency.",
+      "evidence_type": "Cold CPU profile",
+      "status": "Not tested"
+    },
+    {
+      "title": "Payload allocation overlap",
+      "evidence": "POST 500 peak: 32 MiB batch buffer + 5.67 MiB run dictionaries",
+      "interpretation": "Several payload representations coexist.",
+      "optimization": "One-pass encoder / fewer copies",
+      "validation": "Compare peak MiB with identical Memray scope; memory savings not guaranteed.",
+      "evidence_type": "Memory profile",
+      "status": "Not tested"
+    },
+    {
+      "title": "S3 client setup on first request",
+      "evidence": "1 S3 client setup · 0.161 inclusive CPU s / first POST 500",
+      "interpretation": "Client setup appears in the first-request CPU profile.",
+      "optimization": "Reuse S3 client",
+      "validation": "Compare first-request CPU and benchmark latency; verify reuse separately.",
+      "evidence_type": "Cold CPU profile",
+      "status": "Not tested"
+    },
+    {
+      "title": "Three reads for each GET",
+      "evidence": "3 S3 field-read calls / first GET",
+      "interpretation": "Separate request for each field.",
+      "optimization": "One run-level range read",
+      "validation": "Field-read calls 3 → 1; compare GET benchmark latency.",
+      "evidence_type": "Cold CPU profile",
+      "status": "Not tested"
+    },
+    {
+      "title": "GET response encoding",
+      "evidence": "6,157 calls · 0.131 inclusive CPU s / first GET 100 KB",
+      "interpretation": "Many small calls; profiler overhead magnifies cost.",
+      "optimization": "Watchlist only",
+      "validation": "Require an unprofiled win before prioritizing.",
+      "evidence_type": "Cold CPU profile",
+      "status": "Watchlist"
+    }
+  ],
+  "limitations": [
+    "bdf1239 includes the missing-S3-object correctness fix. No performance optimizations.",
+    "CPU uses fresh processes: imports through the first response, with zero warm-up requests. PostgreSQL/MinIO and OS caches were not reset.",
+    "Memory remains the original whole benchmark-test capture; its scope differs from the cold CPU capture.",
+    "Sequential, in-process ASGI; not production concurrency or external HTTP latency.",
+    "CPU profiling adds overhead. Memory is tracked allocation, not RSS or a leak diagnosis. Optimization effects are unmeasured.",
+    "Connection counts and database command counts are not measured by these CPU or memory profiles."
+  ],
+  "sources": {
+    "memory-post-500-10kb": {
+      "label": "POST 500 × 10 KB · Memray binary",
+      "path": "measurements/baseline-bdf1239-gxSv1A8k/original-memory/baseline-tests-benchmarks-test_run_performance.py-test_create_batch_runs_500_10kb.bin",
+      "sha256": "ea7626a9db18ae24299ace569c6eeadd3d757967db2660b53fc9cead5657ea96",
+      "size_bytes": 70076
+    },
+    "memory-post-50-100kb": {
+      "label": "POST 50 × 100 KB · Memray binary",
+      "path": "measurements/baseline-bdf1239-gxSv1A8k/original-memory/baseline-tests-benchmarks-test_run_performance.py-test_create_batch_runs_50_100kb.bin",
+      "sha256": "0c69f16155b96c0cc6c423da8aba46411842fb524fda311869528a40c05ae392",
+      "size_bytes": 42462
+    },
+    "memory-get-10kb": {
+      "label": "GET 10 KB · Memray binary",
+      "path": "measurements/baseline-bdf1239-gxSv1A8k/original-memory/baseline-tests-benchmarks-test_run_performance.py-test_get_run_10kb.bin",
+      "sha256": "6f88b6cbcb6cb1fa23b2cb73156320e722257d0a62b6cc5d76139ba8b2f7635a",
+      "size_bytes": 37443
+    },
+    "memory-get-100kb": {
+      "label": "GET 100 KB · Memray binary",
+      "path": "measurements/baseline-bdf1239-gxSv1A8k/original-memory/baseline-tests-benchmarks-test_run_performance.py-test_get_run_100kb.bin",
+      "sha256": "9536049073586ca0141ac3f07cb2c39ddeaee88179bc64612fd1c973b9984bab",
+      "size_bytes": 37586
+    },
+    "cpu-post-500-10kb-s1": {
+      "label": "POST 500 × 10 KB · cold CPU text · session 1",
+      "path": "profiles/cpu/cold-20261003T050725Z/session-1/post-500-10kb/cpu.txt",
+      "sha256": "b25b3594ddb2ec3743e7181f49867ed8abcf77aceed953d63f103d463d20d1c6",
+      "size_bytes": 503539
+    },
+    "cpu-post-500-10kb-s1-binary": {
+      "label": "POST 500 × 10 KB · cold CPU pstat · session 1",
+      "path": "profiles/cpu/cold-20261003T050725Z/session-1/post-500-10kb/cpu.pstat",
+      "sha256": "19f3a10c424b745ddcea14bdca01d28f11b3ee3ad8ee47082e56f3ead8232dbf",
+      "size_bytes": 1178616
+    },
+    "cpu-post-50-100kb-s1": {
+      "label": "POST 50 × 100 KB · cold CPU text · session 1",
+      "path": "profiles/cpu/cold-20261003T050725Z/session-1/post-50-100kb/cpu.txt",
+      "sha256": "7cc6d7dbbc89e4eb2fb8d4fcdbc9757362bdf12a2ec0a1ef3de6fb5d40af4499",
+      "size_bytes": 503539
+    },
+    "cpu-post-50-100kb-s1-binary": {
+      "label": "POST 50 × 100 KB · cold CPU pstat · session 1",
+      "path": "profiles/cpu/cold-20261003T050725Z/session-1/post-50-100kb/cpu.pstat",
+      "sha256": "34997a6594fc24a028c37738855f5f059fd5237ac2b2d453622b772ff015064b",
+      "size_bytes": 1178522
+    },
+    "cpu-get-10kb-s1": {
+      "label": "GET 10 KB · cold CPU text · session 1",
+      "path": "profiles/cpu/cold-20261003T050725Z/session-1/get-10kb/cpu.txt",
+      "sha256": "82fb5e8c2c1471a07fcd32b9e1e859dbbabdcbd97a24ba8289a4ab16bbee4fa8",
+      "size_bytes": 504205
+    },
+    "cpu-get-10kb-s1-binary": {
+      "label": "GET 10 KB · cold CPU pstat · session 1",
+      "path": "profiles/cpu/cold-20261003T050725Z/session-1/get-10kb/cpu.pstat",
+      "sha256": "1669cb58cc227c822349fda8f11f7f136865b1561bb75ef175721ee4795a853c",
+      "size_bytes": 1177433
+    },
+    "cpu-get-100kb-s1": {
+      "label": "GET 100 KB · cold CPU text · session 1",
+      "path": "profiles/cpu/cold-20261003T050725Z/session-1/get-100kb/cpu.txt",
+      "sha256": "c7adfdbcd4cefab03c0f6596839b3c90aa329d3bf1c3857ac44f849cd401dcab",
+      "size_bytes": 504353
+    },
+    "cpu-get-100kb-s1-binary": {
+      "label": "GET 100 KB · cold CPU pstat · session 1",
+      "path": "profiles/cpu/cold-20261003T050725Z/session-1/get-100kb/cpu.pstat",
+      "sha256": "359032e884ad00e99e6773a7ff935f8085577f9de1a8389944de361fd59345f5",
+      "size_bytes": 1178038
+    },
+    "cold-cpu-summary": {
+      "label": "Cold CPU capture summary (CSV)",
+      "path": "profiles/cpu/cold-20261003T050725Z/summary.csv",
+      "sha256": "f09698108aae7eb5d18705c2d9c03c4bc11203b1817d8c5748a719844d2f4578",
+      "size_bytes": 1294
+    },
+    "cold-cpu-medians": {
+      "label": "Cold CPU phase medians (JSON)",
+      "path": "profiles/cpu/cold-20261003T050725Z/medians.json",
+      "sha256": "2dd1e4f22467b82634af2687efacf8ac6e7437eb00ab6c85a9bc5a5d9297ede7",
+      "size_bytes": 739
+    }
+  },
+  "metric_sources": [
+    {
+      "metric": "Cold CPU phase medians",
+      "source_ids": [
+        "cold-cpu-summary",
+        "cold-cpu-medians"
+      ],
+      "rule": "Four CPU columns: median of the 3 accepted, zero-warmup captures per workload in summary.csv; medians.json holds those values. Medians are independent."
+    },
+    {
+      "metric": "Cold CPU function rows",
+      "source_ids": [
+        "cpu-post-500-10kb-s1-binary",
+        "cpu-post-500-10kb-s1",
+        "cpu-post-50-100kb-s1-binary",
+        "cpu-post-50-100kb-s1",
+        "cpu-get-10kb-s1-binary",
+        "cpu-get-10kb-s1",
+        "cpu-get-100kb-s1-binary",
+        "cpu-get-100kb-s1"
+      ],
+      "rule": "Selected function rows from session-1 cpu.pstat for each workload: calls, self CPU and inclusive CPU, rounded to 6 decimals. The matching cpu.txt is a readable view."
+    },
+    {
+      "metric": "Memory peaks and allocation groups",
+      "source_ids": [
+        "memory-post-500-10kb",
+        "memory-post-50-100kb",
+        "memory-get-10kb",
+        "memory-get-100kb"
+      ],
+      "rule": "Original pytest-memray binaries: sum high-watermark allocation-record bytes / 2^20. Allocation groups are a reviewed classification of those records by Python stack; they sum to each peak."
+    }
+  ]
+}

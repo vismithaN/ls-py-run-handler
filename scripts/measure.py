@@ -1,10 +1,14 @@
-"""Optional harness: separate timing, CPU, memory and diagnostic passes.
+"""Optional harness: separate CPU-time, CPU-profile, memory and diagnostic passes.
 
 Usage: make measure MEASURE_ARGS="--stage baseline"
+Use --passes cpu_time for unprofiled CPU seconds and supplementary request timing.
+Use --passes cpu for cold imports/startup plus one request in a fresh process.
+CPU profiles are saved under profiles/cpu/<run>/session-N/<workload>/.
 The supplied make benchmark and make memprofile commands do not use this harness.
 Keep harness timing/memory results separate from the supplied benchmark results.
-Every session resets ONLY postgres_test/runs-test through make test-setup.
-Do not run tests or other writers against those resources at the same time.
+Non-CPU passes reset ONLY postgres_test/runs-test through make test-setup.
+Do not run other writers against those resources at the same time.
+CPU captures use their own temporary database/bucket and clean them up afterward.
 """
 
 import argparse
@@ -30,7 +34,7 @@ import httpx
 from scripts.measurement_workloads import WORKLOADS, expected_run, fixture
 
 ROOT = Path(__file__).resolve().parents[1]
-PASSES = ("benchmark", "cpu", "memory", "diagnostic")
+PASSES = ("cpu_time", "cpu", "memory", "diagnostic")
 
 
 def require_test_environment():
@@ -226,11 +230,16 @@ async def validate(client, response, data, target, timeout):
 
 
 async def measure_session(args, folder):
-    from ls_py_handler.main import app
-
     settings = require_test_environment()
     metadata = environment(settings)
+    if args.passes[0] == "cpu":
+        from scripts.measurement_cpu import collect
+
+        return await collect(args, folder, settings, metadata)
+
     import asyncpg
+
+    from ls_py_handler.main import app
 
     connection = await asyncpg.connect(
         host=settings.DB_HOST,
@@ -333,12 +342,6 @@ async def workload_session(args, folder, app, settings, metadata):
                         seen_ids.update(response.json()["run_ids"])
                 del warm_responses
 
-                if args.passes[0] == "cpu":
-                    import yappi
-
-                    yappi.clear_stats()
-                    yappi.set_clock_type("cpu")
-                    yappi.start(builtins=True)
                 phase("measured")
                 cpu_before = time.process_time_ns()
                 try:
@@ -387,20 +390,6 @@ async def workload_session(args, folder, app, settings, metadata):
                     workload_ns = time.perf_counter_ns() - workload_started
                 finally:
                     cpu_ns = time.process_time_ns() - cpu_before
-                    if args.passes[0] == "cpu":
-                        yappi.stop()
-                        stats = yappi.get_func_stats()
-                        stats.save(str(folder / "cpu.pstat"), type="pstat")
-                        with (folder / "cpu.txt").open("w") as output:
-                            stats.sort("ttot").print_all(out=output)
-                        profile = {
-                            "cpu_s": cpu_ns / 1e9,
-                            "cpu_s_per_request": cpu_ns / 1e9 / args.requests,
-                            "clock": "cpu",
-                            "builtins": True,
-                            "includes_profiler_overhead": True,
-                            "artifact": "cpu.pstat",
-                        }
                 phase("verification")
                 for sample, response in zip(samples, responses, strict=True):
                     if sample["outcome"] != "pending":
@@ -421,7 +410,7 @@ async def workload_session(args, folder, app, settings, metadata):
     summary = summarize(samples, elapsed, data["batch_size"], method)
     # Clock reads are cheap; use unprofiled process CPU for the CPU-time graph.
     # Yappi's instrumented CPU total remains in the separate profile object.
-    summary["cpu_s"] = cpu_ns / 1e9 if args.passes[0] == "benchmark" else None
+    summary["cpu_s"] = cpu_ns / 1e9 if args.passes[0] == "cpu_time" else None
     summary["cpu_s_per_request"] = (
         summary["cpu_s"] / args.requests if summary["cpu_s"] is not None else None
     )
@@ -482,6 +471,14 @@ def write_json(path, value):
     path.write_text(json.dumps(value, indent=2) + "\n")
 
 
+def cpu_profile_directory(folder):
+    """Map a worker's run/session/workload/cpu folder to profiles/cpu."""
+    run = folder.parents[2]
+    destination = ROOT / "profiles" / "cpu" / run.name / folder.relative_to(run).parent
+    destination.mkdir(parents=True, exist_ok=True)
+    return destination
+
+
 def write_summary(folder):
     rows = []
     for path in sorted(folder.glob("session-*/*/*/result.json")):
@@ -499,22 +496,29 @@ def write_summary(folder):
                 )
             }
             | result["summary"]
-            | {"result_file": str(path.relative_to(folder))}
+            | {
+                "profile_mode": (result.get("profile") or {}).get("mode"),
+                "result_file": str(path.relative_to(folder)),
+            }
         )
     if rows:
+        # "benchmark" is the old label in saved baseline reports; leave them intact.
+        for row in rows:
+            row["unprofiled_cpu_time"] = row["pass"] in ("cpu_time", "benchmark")
         references = {
             (row["workload"], row["session"]): row
             for row in rows
-            if row["pass"] == "benchmark"
+            if row["unprofiled_cpu_time"]
         }
         for row in rows:
-            row["headline_timing"] = row["pass"] == "benchmark"
             reference = references.get((row["workload"], row["session"]))
             # An observed pass-to-pass difference, not a noise-free causal
             # estimate of profiler overhead. Never use these timings as wins.
             row["observed_timing_overhead_pct"] = None
             if (
-                not row["headline_timing"]
+                not row["unprofiled_cpu_time"]
+                # Cold first requests are not comparable with warmed references.
+                and row["profile_mode"] != "cold"
                 and row["accepted"]
                 and reference
                 and reference["accepted"]
@@ -541,9 +545,24 @@ def main():
     parser.add_argument(
         "--workloads", choices=WORKLOADS, nargs="+", default=list(WORKLOADS)
     )
-    parser.add_argument("--requests", type=int, default=5)
-    parser.add_argument("--warmup", type=int, default=1)
-    parser.add_argument("--sessions", type=int, default=3)
+    parser.add_argument(
+        "--requests",
+        type=int,
+        default=5,
+        help="Measured requests for non-CPU passes; cold CPU always uses one",
+    )
+    parser.add_argument(
+        "--warmup",
+        type=int,
+        default=1,
+        help="Warm-up requests for non-CPU passes; cold CPU always uses zero",
+    )
+    parser.add_argument(
+        "--sessions",
+        type=int,
+        default=3,
+        help="Independent sessions per workload/pass (fresh starts for CPU)",
+    )
     parser.add_argument("--seed", type=int, default=20260804)
     parser.add_argument("--timeout", type=float, default=60)
     parser.add_argument("--output", type=Path, default=ROOT / "measurements")
@@ -560,6 +579,8 @@ def main():
             "requests/sessions/timeout must be positive; warmup must be nonnegative"
         )
     require_test_environment()
+    if args.passes == ["cpu"]:
+        args.requests, args.warmup = 1, 0
     if args.worker:
         if len(args.passes) != 1 or len(args.workloads) != 1:
             parser.error("A worker runs one pass and one workload")
@@ -583,19 +604,37 @@ def main():
             "seed": args.seed,
             "timeout_s": args.timeout,
             "smoke": args.smoke,
+            "pass_options": {
+                name: {
+                    "requests": 1 if name == "cpu" else args.requests,
+                    "warmup": 0 if name == "cpu" else args.warmup,
+                    **({"profile_mode": "cold"} if name == "cpu" else {}),
+                }
+                for name in args.passes
+            },
         },
     )
+    if "cpu" in args.passes:
+        print(
+            "CPU: cold application imports/startup + one request per fresh process; "
+            "no warm-up. Services and OS caches stay running.",
+            flush=True,
+        )
     failed = False
     for session in range(1, args.sessions + 1):
         for workload in args.workloads:
             for collection in args.passes:
                 target = folder / f"session-{session}" / workload / collection
                 target.mkdir(parents=True)
+                cold_cpu = collection == "cpu"
+                requests, warmup = (1, 0) if cold_cpu else (args.requests, args.warmup)
+                setup = "isolated cold CPU capture" if cold_cpu else "clean test setup"
                 print(
-                    f"Session {session}: {workload} / {collection} — clean test setup",
+                    f"Session {session}: {workload} / {collection} — {setup}",
                     flush=True,
                 )
-                subprocess.run(["make", "test-setup"], cwd=ROOT, check=True)
+                if not cold_cpu:
+                    subprocess.run(["make", "test-setup"], cwd=ROOT, check=True)
                 cmd = [
                     sys.executable,
                     "-m",
@@ -608,9 +647,9 @@ def main():
                     "--workloads",
                     workload,
                     "--requests",
-                    str(args.requests),
+                    str(requests),
                     "--warmup",
-                    str(args.warmup),
+                    str(warmup),
                     "--sessions",
                     str(args.sessions),
                     "--session",
@@ -633,7 +672,7 @@ def main():
                 if path.exists():
                     result = json.loads(path.read_text())
                     print(
-                        f"  {result['summary']['correct']}/{args.requests} correct; "
+                        f"  {result['summary']['correct']}/{requests} correct; "
                         f"result: {path}",
                         flush=True,
                     )

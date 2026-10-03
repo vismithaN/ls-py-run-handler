@@ -1,4 +1,5 @@
 import asyncio
+import io
 import uuid
 from typing import Any, Dict, List, Optional
 
@@ -68,10 +69,32 @@ async def create_runs(
     # Prepare the batch for S3 upload
     batch_id = str(uuid.uuid4())
 
-    run_dicts = [run.model_dump() for run in runs]
-    batch_data = orjson.dumps(run_dicts)
-
     object_key = f"batches/{batch_id}.json"
+
+    batch = io.BytesIO()
+    batch.write(b"[")
+    run_refs = []
+    for index, run in enumerate(runs):
+        if index:
+            batch.write(b",")
+        batch.write(b"{")
+        field_refs = {}
+        for field_index, (key, value) in enumerate(run.model_dump().items()):
+            if field_index:
+                batch.write(b",")
+            batch.write(orjson.dumps(key) + b":")
+            start = batch.tell()
+            encoded = orjson.dumps(value)
+            batch.write(encoded)
+            if key in ("inputs", "outputs", "metadata"):
+                field_refs[key] = (
+                    f"s3://{settings.S3_BUCKET_NAME}/{object_key}"
+                    f"#{start}:{start + len(encoded)}/{key}"
+                )
+        batch.write(b"}")
+        run_refs.append(field_refs)
+    batch.write(b"]")
+    batch_data = batch.getvalue()
 
     # Upload the batch data
     await s3.put_object(
@@ -84,24 +107,7 @@ async def create_runs(
     # Store references in PG
     inserted_ids = []
 
-    for i, run in enumerate(runs):
-        run_dict = run_dicts[i]
-
-        # Calculate specific offsets for each field in the JSON using a loop
-        field_refs = {}
-        for field in ["inputs", "outputs", "metadata"]:
-            field_json_data = orjson.dumps(run_dict.get(field, {}))
-            field_start_in_run = batch_data.find(field_json_data)
-
-            if field_start_in_run != -1:
-                field_start = field_start_in_run
-                field_end = field_start + len(field_json_data)
-                field_refs[
-                    field
-                ] = f"s3://{settings.S3_BUCKET_NAME}/{object_key}#{field_start}:{field_end}/{field}"
-            else:
-                field_refs[field] = ""
-
+    for run, field_refs in zip(runs, run_refs, strict=True):
         run_id = await db.fetchval(
             """
             INSERT INTO runs (id, trace_id, name, inputs, outputs, metadata)

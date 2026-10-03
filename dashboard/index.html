@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Run handler · Optimization dashboard</title>
+  <script>
+    try {
+      document.documentElement.dataset.theme =
+        localStorage.getItem('benchmark-dashboard-theme') === 'dark' ? 'dark' : 'light';
+    } catch { /* Theme switching still works if browser storage is unavailable. */ }
+  </script>
+  <link rel="stylesheet" href="/assets/styles.css">
+  <script src="/assets/dashboard.js" defer></script>
+  <script src="/assets/profiles.js" defer></script>
+</head>
+<body>
+  <main>
+    <header>
+      <div><p class="eyebrow">RUN HANDLER / OPTIMIZATION EXPERIMENT</p><h1>Optimization dashboard</h1><p class="subheading">Benchmark graphs and the profile evidence behind each optimization.</p></div>
+      <div class="header-actions">
+        <div class="theme-switch" role="group" aria-label="Color theme">
+          <button type="button" data-theme-choice="light" aria-pressed="true">Light</button>
+          <button type="button" data-theme-choice="dark" aria-pressed="false">Dark</button>
+        </div>
+        <div class="live-status" id="status" role="status">Connecting…</div>
+      </div>
+    </header>
+    <div class="notice" id="error" role="alert" hidden></div>
+    <nav class="dashboard-tabs" role="tablist" aria-label="Dashboard views">
+      <button type="button" id="benchmark-tab" role="tab" aria-controls="benchmark-panel" aria-selected="true" data-view="benchmarks">Benchmark graphs</button>
+      <button type="button" id="profile-tab" role="tab" aria-controls="profile-panel" aria-selected="false" tabindex="-1" data-view="profiles">Profile interpretation</button>
+    </nav>
+    <section id="benchmark-panel" role="tabpanel" aria-labelledby="benchmark-tab">
+    <section class="controls" aria-label="Comparison controls">
+      <label class="environment">Comparison set<select id="group"></select></label>
+      <fieldset><legend>Workloads</legend><div id="workloads"></div></fieldset>
+    </section>
+    <p class="context" id="context"></p>
+    <details class="setup">
+      <summary>How results and stage names work</summary>
+      <p>Keep this dashboard open. In a separate terminal, run:</p>
+      <pre><code>PYTEST_ADDOPTS="--benchmark-save-data" make benchmark</code></pre>
+      <p>Every completed JSON in <code>.benchmarks/</code> becomes a point. The first report in a comparison set is its baseline. Name later reports after their optimization below. Repeated runs stay separate; they are not automatically averaged.</p>
+      <p>The save-data flag keeps raw timing samples without changing measurement settings. Plain <code>make benchmark</code> still updates summary charts, but may omit distributions.</p>
+      <p>Different recorded machines, benchmark options or plugin versions use separate comparison sets. The JSON does not record every dependency or service setting; keep those consistent too.</p>
+      <p>Latency uses elapsed time, not CPU time. POST throughput is batches/s; GET throughput is requests/s. These sequential timings do not measure concurrent capacity. The Profile interpretation tab keeps CPU/memory findings separate from these timing graphs.</p>
+    </details>
+    <details class="stages" open>
+      <summary>Stages and report provenance</summary>
+      <div id="stages"></div>
+    </details>
+    <div class="notice" id="warnings" hidden></div>
+    <section id="empty" class="empty" hidden><h2>No completed benchmark reports yet</h2><p>Run <code>make benchmark</code>; the four supplied scenarios will appear here automatically.</p></section>
+    <section class="chart-section" id="performance-section"><h2>Latency and throughput</h2><p>Lower latency is better. Higher operation rate is better. Values describe the entire API request.</p><div class="charts" id="performance"></div></section>
+    <section class="chart-section" id="variation-section"><h2>Variation and distribution summaries</h2><p>Look for consistency alongside lower latency. Quartiles and whisker statistics describe the timing distribution, not separate workloads.</p><div class="charts" id="variation"></div></section>
+    <section class="chart-section" id="samples-section"><h2>Raw timing samples</h2><p>One point per recorded round; when iterations exceed one, each point is a round average. These are not additional independent requests.</p><div class="charts" id="samples"></div></section>
+    <section class="chart-section" id="measurement-section"><h2>Measurement context and outlier counts</h2><p>Not optimization scores. Total depends on repetitions; rounds and iterations describe collection. Outliers are statistical flags, not failed requests.</p><div class="charts" id="measurement"></div></section>
+    </section>
+    <section id="profile-panel" role="tabpanel" aria-labelledby="profile-tab" hidden>
+      <div class="controls profile-controls">
+        <label class="environment">Interpretation stage<select id="profile-stage" aria-label="Profile interpretation stage"></select></label>
+        <div class="profile-actions">
+          <a id="profile-download" class="button-link" hidden>Download interpretation</a>
+          <button id="profile-print" type="button">Print / save PDF</button>
+        </div>
+      </div>
+      <div class="notice" id="profile-warnings" role="alert" hidden></div>
+      <section id="profile-empty" class="empty" hidden><h2>No saved profile interpretations yet</h2><p>Add a stage file under <code>reports/interpretations/</code>. This viewer does not run profiling or generate interpretations automatically.</p></section>
+      <div id="profile-content" aria-live="polite"></div>
+    </section>
+    <footer>The dashboard reads saved reports without changing them. Stage names are stored in <code>.benchmarks/.dashboard-labels.json</code>; profile interpretations are stored in <code>reports/interpretations/</code>.</footer>
+  </main>
+  <div id="tooltip" role="tooltip" hidden></div>
+</body>
+</html>

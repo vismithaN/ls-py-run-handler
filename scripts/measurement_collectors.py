@@ -1,4 +1,4 @@
-"""Diagnostic-only hooks. Nothing here runs in the headline timing pass."""
+"""Diagnostic-only hooks. Nothing here runs in the unprofiled cpu_time pass."""
 
 import asyncio
 from asyncio.selector_events import _SelectorSocketTransport

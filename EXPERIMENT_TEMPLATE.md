@@ -55,10 +55,25 @@ The correctness fix is separate from performance optimizations.
 | Separate commands | `make test` excludes `tests/benchmarks`; `make benchmark` selects only benchmarks. Removed the extra correctness target. | `make test`: **8 passed** in 9.30 seconds. Benchmark selection: four cases collected; benchmarks not executed in this step. |
 | Measurement harness | Added separate timing, Yappi CPU, Memray allocation and diagnostic passes. Saves raw samples, profiles, environment/code fingerprints and graph-ready CSV. No application optimizations or commits. | Correctness: **8 passed** in 12.34 seconds. Final smoke matrix: **16/16 workload/pass combinations**, **32/32 measured requests correct**. Verified readable profiles, exact body bytes, connection reuse/closures, retries, COPY/transactions and summary math. These checks are **not baseline results**. |
 | Detachable harness | Restored the supplied `make benchmark` and `make memprofile` commands; supplementary collection is now opt-in through `make measure`. Do not mix their timing/memory result series. | Original benchmark/profile target definitions match the pre-harness version; command checks only, no new baseline measurements. |
+| Persistent memory profiles | `make memprofile` now saves binaries in a unique `profiles/memory/<UTC timestamp>-<random suffix>/` directory. Only the output destination changes; profiling scope and benchmarks stay the same. Generated profiles are Git-ignored. | Verified with isolated storage checks, without resetting the test resources used by the running baseline. |
+| CPU profile folder | CPU profiles now go to `profiles/cpu/<run>/session-N/<workload>/`. Existing baseline profiles are preserved there with compatibility links at their old locations. Output location only; Yappi settings, workloads and timing boundaries are unchanged. The running baseline records the storage-only harness revision change. | Validated output routing and readable profiles without interrupting the baseline. |
+| Clear pass names | Renamed the supplementary harness pass from `benchmark` to `cpu_time`; `make benchmark` still means the original pytest benchmark. Measurements are unchanged; existing baseline files keep their historical labels. | Checked command help and summary generation for both new and historical labels; no test-resource reset. |
+| Completed baseline | Collected the original timing and memory workflows, plus supplementary CPU time, CPU profiles and diagnostics on `bdf1239` (includes the separate correctness fix). | Original timing: **4 passed**; original memory: **4 passed**. Supplementary: **36/36 combinations**, **180/180 measured requests correct**, and **12 readable CPU profiles**. Results: `measurements/baseline-bdf1239-gxSv1A8k/`. |
+| Benchmark dashboard | Added a separate local viewer for `.benchmarks/`: all numeric statistics, raw timing distributions, stage names and SVG export. New completed reports are discovered every 3 seconds. No application or benchmark-method changes. | **2 dashboard tests passed**. Browser checks passed for live updates, stage labels, comparison sets, SVG export and 320–1440 px layouts. No PostgreSQL/S3 reset or benchmark execution. |
+| Persisted baseline interpretation | Added the **Profile interpretation** tab: numeric CPU/memory results, expandable allocation details and a concise findings table. The initial CPU display used the warm capture; it was superseded below. | **2 dashboard tests passed**; 16 CPU rows / 4 memory peaks matched recordings. Browser: light/dark themes, details and all 20 benchmark charts verified. |
+| Cold CPU interpretation | Replaced the tab’s warm CPU numbers with the 12 fresh-process cold captures. Shows import, startup and first-request CPU medians separately; updated function numbers, findings and source links. Memory values remain from their original capture. | **12/12 cold captures accepted**; 1 request/process, 0 warm-ups. Four phase medians and 16 function rows checked against recordings. **2 dashboard tests passed**; browser shows cold values. No application optimization or commit. |
+| Cold CPU command | `make measure MEASURE_ARGS="--passes cpu"` now profiles imports, startup and one first request per fresh process, without warm-up. Existing warm profiles and the benchmark/memory commands are unchanged. | **4/4 smoke captures passed**; distinct processes, one endpoint call each, readable profiles and temporary-storage cleanup verified. Injected-failure cleanup and warm/cold comparison checks passed. Results: `measurements/cpu-cold-command-check/20261003T053611.281220Z/`. These are harness checks, not new baseline numbers. |
+| Profile source lock | Pinned only the Yappi cold-CPU and original `make memprofile` Memray inputs used by the profile tab, with paths, byte sizes, SHA-256 hashes and calculation rules. The dashboard flags missing/changed files. | **14/14 source files verified**; dashboard tests include same-size content changes. No profiler or benchmark rerun. |
+
+### Step log — 2026-10-03
+
+| Step | Change | Verification |
+|---|---|---|
+| One-pass POST offsets | Build the same batch JSON in a byte buffer and record each large field's offset as it is written. No connection, database-write or GET change. Uncommitted. | **10/10 tests passed**; **4/4 original benchmarks passed**; **4/4 original Memray profiles passed**; **12/12 cold CPU captures correct**. Reports are listed below. |
 
 Keep `b11a9b9` as the original reference. Identify the separate correctness-fix
-revision when collecting the corrected performance baseline. No full-workload
-performance baseline has been collected; tiny fixtures validate the harness only.
+revision when collecting the corrected performance baseline. The full-workload
+baseline is now collected; earlier tiny-fixture runs validate the harness only.
 
 ## Supplementary measurements — optional harness
 
@@ -78,7 +93,7 @@ numbers directly with harness numbers.
 | Successful request/batch rate | requests/s | Correctly completed requests divided by elapsed time for the measured workload. One POST request is one batch; one GET request retrieves one run | No—label the traffic/concurrency used |
 | Ingestion rate | runs/s | Correctly persisted runs divided by elapsed time for the measured workload; POST only | No |
 | Peak allocated memory | MiB | Memray allocation high-watermark for the whole harness workload session, using identical scope. Includes in-process client/fixture allocations; this is not server-only RAM or RSS | No—collect separately from primary timing |
-| CPU time | CPU seconds/workload and CPU seconds/request | Unprofiled Python process CPU time (user + system) before/after the measured timing-pass workload; divide by attempted requests. Includes the in-process client; excludes PostgreSQL/MinIO processes and Yappi overhead | No—keep failed-request counts visible |
+| CPU time | CPU seconds/workload and CPU seconds/request | Unprofiled Python process CPU time (user + system) before/after the measured `cpu_time` workload; divide by attempted requests. Includes the in-process client; excludes PostgreSQL/MinIO processes and Yappi overhead | No—keep failed-request counts visible |
 | CPU profile | Saved function-level profile | Profile the same workload to identify expensive functions. Record profiler, version and timing mode; distinguish CPU execution from elapsed time waiting for I/O | No—compare where time is spent |
 | Memory profile | Saved allocation profile | Use Memray to identify allocation locations alongside the peak allocated memory measurement | No—compare where allocations happen |
 | PostgreSQL command count | dispatch attempts/request | asyncpg Connection execution attempts, including COPY and transaction commands, grouped by operation. Count retries; multi-statement/`executemany` dispatches count as one attempt, not individual rows or wire messages. Exclude startup, migrations and seeding | Usually, for fixed code/state without retries; investigate differences |
@@ -97,20 +112,22 @@ the original and candidate code. Label real-HTTP measurements separately.
 
 ## How we collect supplementary measurements
 
-When using the optional harness, run the same passes for its baseline and after
-every optimization. Each uses the
+For the active experiment, use only the `cpu` pass in this harness. The other
+passes and their saved historical reports remain available if a later question
+needs them; they are not inputs to the profile dashboard. When using any optional
+pass for a comparison, run that same pass before and after the change. Each uses the
 same workloads and equivalent starting data. Correctness checks apply to all
 passes; run data verification outside the request timing boundary.
 
 | Collection pass | How we collect it | Saved output |
 |---|---|---|
-| **Benchmark** | Time each complete API call; summarize correct completions and workload elapsed time. Also read the cheap process CPU clock before/after the workload | Individual timings, outcomes, mean/median/p95, requests/s, POST runs/s and unprofiled CPU seconds |
-| **CPU** | Collect a Yappi function-level CPU profile in a separate pass | Profile artifact and instrumented CPU total; label profiling overhead separately |
+| **CPU time (`cpu_time`)** | Read the process CPU clock before/after the workload, without profiling. Also retain supplementary request timings and rates; these are not the original pytest benchmark | Unprofiled CPU seconds, individual timings, outcomes, mean/median/p95, requests/s and POST runs/s |
+| **CPU** | Collect a cold Yappi CPU profile: application imports, startup and one first request in a fresh process, without warm-up | Function profile plus CPU totals split into imports, startup/client and first request. Includes profiler overhead; not a warmed benchmark |
 | **Memory** | Track the whole workload session with Memray: fixture/client creation, startup, seed, warm-up, requests, verification and shutdown. Metadata collection/module imports are excluded. Use aggregated allocation capture to keep profile files manageable | Peak allocated MiB and allocation profile artifact |
 | **Diagnostic** | Instrument database command execution and outgoing S3 HTTP attempts, successful connection establishments/closures, and actual serialized/transferred byte lengths | Per-operation counts, connections opened/peak open by service, payload/upload/download bytes |
 
 Keep CPU profiling, memory profiling and detailed diagnostic instrumentation out
-of the benchmark pass so their overhead does not distort headline latency.
+of the `cpu_time` pass so their overhead does not distort its measurements.
 Memory and CPU scope includes the in-process Python test client, not the
 PostgreSQL or MinIO processes. Client creation and pool borrowing do not count
 as opening physical connections. Exclude verification traffic from diagnostic
@@ -122,31 +139,108 @@ lifecycle/client per session. It is not imported or invoked by the supplied
 benchmark or memory-profile commands. Its measurements form a separate series;
 graph generation comes after collecting real results.
 
-Commands:
+### `make measure` arguments
+
+`--passes` selects which supplementary measurement to run. The four valid pass
+names are:
+
+| Argument | Question it answers | Tool / method |
+|---|---|---|
+| `cpu_time` | How much CPU did the workload use without profiler overhead? | Process CPU clock |
+| `cpu` | Which functions used the CPU? | Yappi CPU profiler |
+| `memory` | Where was memory allocated, and what was the peak? | Memray |
+| `diagnostic` | How many PostgreSQL commands, S3 requests, connections and bytes were used? | Harness instrumentation |
+
+Running `make measure` without `--passes` runs all four passes, so use an
+explicit selection for the active experiment:
 
 ```bash
 make benchmark   # Original pytest-benchmark workflow
 make memprofile  # Original pytest-memray workflow
-make measure     # Optional harness: all four collection passes
+make measure MEASURE_ARGS="--passes cpu"
 ```
 
+Use `cpu` to explain where CPU time went; its timings include profiler overhead
+and are not benchmark results. Keep `cpu_time` in reserve if a later experiment
+needs unprofiled process CPU time. Do not mix the optional `memory` pass with the
+original `make memprofile` memory series. The original benchmark and memory
+workflows remain separate from this supplementary harness.
+
+For readable benchmark graphs, run `make dashboard` and open
+`http://127.0.0.1:8765`. In another terminal, run
+`PYTEST_ADDOPTS="--benchmark-save-data" make benchmark` to retain raw samples as
+well as summary statistics. The dashboard adds completed reports automatically;
+rename each run to its optimization stage in the page. Labels persist separately
+in `.benchmarks/.dashboard-labels.json`; original reports are never edited.
+Plain `make benchmark` still updates summary graphs, but may omit raw samples.
+Different recorded environments/options are not mixed. Each report is one run;
+repeated runs are not automatically averaged. The separate **Profile interpretation**
+tab shows saved Yappi CPU and original Memray results and their interpretation for
+each stage. Curated stage files live in `reports/interpretations/`; source recordings
+remain unchanged. The tab shows the **cold-start** CPU captures: three fresh
+processes per workload, one measured request and no warm-up. Memory values come
+from the original whole-test Memray capture; follow its separately stated scope.
+The tab supports downloading the saved interpretation and printing / saving a PDF;
+it never runs profilers or automatically generates findings.
+
+The baseline tab uses these fixed report groups, recorded in
+`reports/interpretations/baseline.json`:
+
+| Displayed result | Pinned input | Calculation |
+|---|---|---|
+| Cold CPU phases | `profiles/cpu/cold-20261003T050725Z/summary.csv` and `medians.json` | Independent median of 3 accepted captures per workload/phase |
+| Cold CPU functions | Session-1 `cpu.pstat` for each of the 4 workloads | Selected function calls, self CPU, inclusive CPU |
+| Memory peak/breakdown | 4 original `pytest-memray` `.bin` recordings | High-watermark bytes ÷ 2²⁰; reviewed stack groups |
+
+The interpretation also pins the readable session-1 CPU text reports. Every
+source is checked by SHA-256 on dashboard refresh; a mismatch is visible and its
+download link is disabled. Saved numbers are not silently recalculated from a
+new report. The benchmark graph tab continues to discover `.benchmarks/`
+independently.
+
+`make benchmark` saves timing results in `.benchmarks/`. `make memprofile` saves
+binary profiles in `profiles/memory/<UTC timestamp>-<random suffix>/` and prints
+the directory plus its memory summary. Each run gets a new directory; generated
+profiles are Git-ignored. The first baseline's existing memory profiles remain
+in `measurements/baseline-bdf1239-gxSv1A8k/original-memory/`.
+CPU profiles (`cpu.txt`, `cpu-self.txt` and `cpu.pstat`) are saved under
+`profiles/cpu/<run>/session-N/<workload>/`, including when CPU is selected through
+`make measure`. This directory is also Git-ignored.
+
 Harness defaults: **3 independent sessions, 5 measured requests and 1 warm-up request**
-per workload/pass. Choose and freeze the budget before collecting its baseline;
+per workload for non-CPU passes. **CPU profiling is cold by default:**
+`make measure MEASURE_ARGS="--passes cpu"` captures one first request with zero
+warm-ups in each fresh process (3 captures per workload). `--requests` and
+`--warmup` do not change the CPU pass; use `--sessions` to change its repetition count.
+Profiling starts before application imports and includes application/client startup;
+fixture preparation, GET seeding, verification and shutdown are outside the profile.
+PostgreSQL, MinIO and OS caches are not restarted or flushed. Keep new cold profiles
+separate from the existing warm baseline profiles, which remain unchanged.
+Choose and freeze the budget before collecting its baseline;
 five samples do not establish a reliable tail percentile. Options include
 `--requests`, `--sessions`, `--warmup`, `--workloads` and `--passes`.
 `MEASURE_ARGS` affects **only `make measure`**, for example
 `make measure MEASURE_ARGS="--stage baseline --passes diagnostic"`.
 
-Each harness workload/pass/session resets **only `postgres_test` and `runs-test`** through
+Non-CPU passes reset **only `postgres_test` and `runs-test`** through
 `make test-setup`. Do not run other writers against these resources concurrently.
+Each CPU capture instead creates its own `cpu_cold_<UUID>` database and
+`cpu-cold-<UUID>` bucket, then removes those resources after verification.
+Their names and cleanup status are recorded in `resources.json`.
 POST verification reads **every persisted run** outside timing/CPU scope, so full
 collections can take longer than the measured requests themselves.
 
 Harness output: `measurements/<timestamp>/summary.csv`, plus per-session `result.json`,
-`cpu.pstat`/`cpu.txt`, `memory.bin` and worker logs. Missing metrics remain empty/
-`null`, not zero. Use only accepted **experiment** rows from the **benchmark**
-pass for supplementary harness latency/throughput graphs. CSV also reports observed timing
-overhead of instrumented passes versus timing-only runs; this includes noise.
+worker logs and optional harness `memory.bin`. CPU profiles are stored separately
+under `profiles/cpu/`; each CPU result records their paths. New CPU-time reports use
+`session-N/<workload>/cpu_time/result.json`; older baseline reports keep the previous
+`benchmark` folder/pass label and remain readable. Missing metrics remain empty/
+`null`, not zero. Use only accepted **experiment** rows from the **cpu_time**
+pass for supplementary harness latency/throughput graphs. CSV marks these rows with
+`unprofiled_cpu_time` and reports observed timing overhead of instrumented passes
+versus unprofiled runs; this includes noise. Cold CPU rows are marked
+`profile_mode=cold` and excluded from that overhead calculation because cold
+first requests and warmed workloads are not comparable.
 `--smoke` uses tiny fixtures and labels results **harness-validation**, not baseline.
 
 Diagnostics are validated on Python's selector loop with the recorded dependency
@@ -178,15 +272,25 @@ download bodies consumed by the application; they exclude headers/TCP framing.
 
 | Experiment / what we change | What we measure | Expected outcome | Benchmark results: before → after |
 |---|---|---|---|
-| **Baseline — no changes** | All measurements defined above for the four supplied scenarios | Establish the starting numbers | Not measured |
+| **Corrected baseline — no performance optimizations** | Original timing/memory workflows and supplementary CPU time/profiles/diagnostics for the four supplied scenarios | Establish the starting numbers after the separate correctness fix | Collected on `bdf1239`; primary numbers: `measurements/baseline-bdf1239-gxSv1A8k/primary-summary.csv`; supplementary numbers: `measurements/baseline-bdf1239-gxSv1A8k/supplementary/20261003T011935.704701Z/summary.csv` |
 | **Connection pooling** | POST/GET latency, new connections and peak open connections | Fewer new connections and lower request latency; bounded open connections | Not measured |
-| **One-pass encoding** | POST latency, process CPU time, and peak allocated memory | Less repeated work, lower memory use, and faster ingestion | Not measured |
+| **One-pass encoding** | Original POST benchmark latency; cold profiled first-request CPU; original Memray peak | Less repeated work, lower memory use, and faster ingestion | POST 500 median **2.107 → 0.580 s (−72.5%)**; POST 50 **0.620 → 0.381 s (−38.5%)**. Cold POST 500 first-request CPU **1.771 → 0.722 s (−59.2%)**. POST 500 peak **191.401 → 171.241 MiB (−10.5%)**; POST 50 **132.352 → 118.343 MiB (−10.6%)**. GET code unchanged. |
 | **Bulk database writes** | POST latency, ingestion throughput and database command count | Fewer database commands and faster batch ingestion | Not measured |
 | **One S3 read per run** | GET latency, S3 request count and downloaded bytes | Fewer S3 requests and faster retrieval; measure the byte-transfer tradeoff | Not measured |
 
-The rows highlight each optimization's main measurements; collect the full
-measurement set at every stage. Record expected effects before testing, including
-a numeric target if justified; do not invent expected percentages.
+The rows highlight each optimization's main measurements. Use the three active
+workflows (`make benchmark`, `make memprofile`, cold `make measure --passes cpu`)
+at each stage. Keep other harness passes optional and separate. Record expected
+effects before testing; do not invent expected percentages.
+
+One-pass reports: `.benchmarks/Darwin-CPython-3.11-64bit/0002_baseline.json`,
+`profiles/memory/20261003T061452Z-aBejij2X/`, and
+`measurements/20261003T061543.624262Z/summary.csv` with matching raw Yappi
+files under `profiles/cpu/20261003T061543.624262Z/`. The dashboard labels the
+benchmark report **One-pass encoder** and pins the CPU/memory sources in
+`reports/interpretations/one-pass-encoder.json`. This is one benchmark report
+per stage, not a confidence interval; do not attribute small GET timing shifts
+to the POST change.
 
 For each result, include the workload and numbers—for example:
 `POST 500 × 10 KB: median __ → __ ms; peak allocated memory __ → __ MiB`.
@@ -217,7 +321,7 @@ before/after series.
   for throughput, increase is `(after − before) / before × 100`. If the baseline
   value is zero, show the absolute change and mark the percentage `N/A`.
 - Keep workloads, workflows and collection passes separate. Within the optional
-  harness, use benchmark-pass timings for latency graphs, not profiler timings.
+  harness, use `cpu_time`-pass timings for supplementary latency graphs, not profiler timings.
   Label sequential throughput as such;
   it is not evidence of maximum concurrent capacity.
 - Explain each result as: **expected effect → actual numbers → supporting

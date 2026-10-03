@@ -1,7 +1,8 @@
-.PHONY: db-up db-down db-migrate db-downgrade db-migrate-test server format lint lint-fix test test-setup benchmark benchmark-compare benchmark-compare-save memprofile measure
+.PHONY: db-up db-down db-migrate db-downgrade db-migrate-test server format lint lint-fix test test-setup benchmark benchmark-compare benchmark-compare-save memprofile measure dashboard
 
 # Options for the optional measurement harness only
 MEASURE_ARGS ?= --stage baseline
+DASHBOARD_ARGS ?=
 
 # Start all database services defined in docker-compose-db.yaml
 db-up:
@@ -54,11 +55,17 @@ benchmark: test-setup
 	@echo "Running performance benchmarks..."
 	RUN_HANDLER_ENV=test poetry run pytest tests/benchmarks/test_run_performance.py -v --benchmark-save=baseline --benchmark-compare
 
-# Run memory profiling
+# Run memory profiling; retain each run in a unique output directory
 memprofile: test-setup
-	@echo "Running memory profiling..."
-	RUN_HANDLER_ENV=test poetry run pytest tests/benchmarks/test_run_performance.py -v --memray
+	@mkdir -p profiles/memory
+	@memory_profile_dir=$$(mktemp -d "profiles/memory/$$(date -u +%Y%m%dT%H%M%SZ)-XXXXXXXX") && \
+		echo "Saving memory profiles to $$memory_profile_dir" && \
+		RUN_HANDLER_ENV=test poetry run pytest tests/benchmarks/test_run_performance.py -v --memray --memray-bin-path="$$memory_profile_dir"
 
 # Optional supplementary measurements; resets test resources per workload/pass/session
 measure:
 	RUN_HANDLER_ENV=test poetry run python -m scripts.measure $(MEASURE_ARGS)
+
+# Local viewer only; does not reset test resources or execute benchmarks
+dashboard:
+	poetry run python -m scripts.benchmark_dashboard $(DASHBOARD_ARGS)

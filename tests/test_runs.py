@@ -112,7 +112,23 @@ async def test_repeated_field_content():
         make_run("Repeated", inputs=shared, outputs=shared, metadata=shared),
     ]
     async with AsyncClient(app=app, base_url="http://test") as client:
-        await assert_roundtrip(client, runs)
+        ids = await assert_roundtrip(client, runs)
+    db = await asyncpg.connect(
+        host=settings.DB_HOST,
+        port=settings.DB_PORT,
+        user=settings.DB_USER,
+        password=settings.DB_PASSWORD,
+        database=settings.DB_NAME,
+    )
+    try:
+        row = await db.fetchrow(
+            "SELECT inputs, outputs, metadata FROM runs WHERE id = $1",
+            uuid.UUID(ids[1]),
+        )
+        starts = [row[field].split("#", 1)[1].split(":", 1)[0] for field in row.keys()]
+        assert len(set(starts)) == 3
+    finally:
+        await db.close()
 
 
 async def test_invalid_requests_and_missing_runs():
