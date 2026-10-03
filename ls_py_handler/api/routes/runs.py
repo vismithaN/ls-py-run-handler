@@ -168,36 +168,48 @@ async def get_run(
 
         return bucket, key, None, None
 
-    # Function to fetch data from S3 based on reference with byte range
-    async def fetch_from_s3(ref):
-        if not ref or not ref.startswith("s3://"):
-            return {}
+    async def fetch_range(bucket, key, start, end):
+        response = await s3.get_object(
+            Bucket=bucket, Key=key, Range=f"bytes={start}-{end - 1}"
+        )
+        async with response["Body"] as stream:
+            data = await stream.read()
+        if len(data) != end - start:
+            raise ValueError("Incomplete S3 range response")
+        return data
 
-        bucket, key, offsets, field = parse_s3_ref(ref)
+    async def fetch_field(ref):
+        bucket, key, offsets, _ = ref
         if not bucket or not key or not offsets:
             return {}
+        return orjson.loads(await fetch_range(bucket, key, *offsets))
 
-        start_offset, end_offset = offsets
-        byte_range = f"bytes={start_offset}-{end_offset-1}"
+    fields = ("inputs", "outputs", "metadata")
+    try:
+        refs = [parse_s3_ref(run_data[field]) for field in fields]
+        if (
+            all(bucket and key and offsets for bucket, key, offsets, _ in refs)
+            and len({(bucket, key) for bucket, key, _, _ in refs}) == 1
+        ):
+            # One range covers the three fields without fetching the full batch.
+            bucket, key = refs[0][:2]
+            start = min(offsets[0] for _, _, offsets, _ in refs)
+            end = max(offsets[1] for _, _, offsets, _ in refs)
+            data = await fetch_range(bucket, key, start, end)
+            values = [
+                orjson.loads(data[offsets[0] - start : offsets[1] - start])
+                for _, _, offsets, _ in refs
+            ]
+        else:
+            # Older references may point to different S3 objects.
+            values = await asyncio.gather(*(fetch_field(ref) for ref in refs))
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Stored run data is unavailable",
+        ) from e
 
-        try:
-            # Fetch only the required byte range
-            response = await s3.get_object(Bucket=bucket, Key=key, Range=byte_range)
-            async with response["Body"] as stream:
-                data = await stream.read()
-            return orjson.loads(data)
-
-        except Exception as e:
-            raise HTTPException(
-                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-                detail="Stored run data is unavailable",
-            ) from e
-
-    inputs, outputs, metadata = await asyncio.gather(
-        fetch_from_s3(run_data["inputs"]),
-        fetch_from_s3(run_data["outputs"]),
-        fetch_from_s3(run_data["metadata"]),
-    )
+    inputs, outputs, metadata = values
 
     return {
         "id": str(run_data["id"]),

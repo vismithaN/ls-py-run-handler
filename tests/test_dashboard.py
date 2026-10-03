@@ -125,7 +125,9 @@ def test_s3_session_reuse_interpretation_is_comparable(tmp_path, monkeypatch):
 
     assert not snapshot["warnings"]
     assert [stage["id"] for stage in snapshot["stages"]] == [
-        "baseline", "one-pass-encoder", "s3-session-reuse"
+        "baseline",
+        "one-pass-encoder",
+        "s3-session-reuse",
     ]
     current = snapshot["stages"][-1]
     assert current["source_verification"]["verified"] == 13
@@ -135,6 +137,29 @@ def test_s3_session_reuse_interpretation_is_comparable(tmp_path, monkeypatch):
         "S3 client dependency"
     )
     for workload in current["memory"]["workloads"]:
+        assert math.isclose(
+            sum(row["mib"] for row in workload["allocations"]),
+            workload["peak_mib"],
+        )
+
+
+def test_one_s3_read_interpretation(tmp_path, monkeypatch):
+    saved = tmp_path / "interpretations"
+    saved.mkdir()
+    source = ROOT / "reports" / "interpretations" / "one-s3-read.json"
+    (saved / source.name).write_bytes(source.read_bytes())
+    store = InterpretationStore(saved)
+    monkeypatch.setattr(store, "source_status", lambda source: "verified")
+
+    snapshot = store.snapshot()
+
+    assert not snapshot["warnings"]
+    stage = snapshot["stages"][0]
+    assert stage["order"] == 3
+    assert stage["source_verification"]["verified"] == 11
+    assert len(stage["cpu"]["phase_medians"]) == 4
+    assert stage["cpu"]["workloads"][2]["functions"][1]["calls"] == 1
+    for workload in stage["memory"]["workloads"]:
         assert math.isclose(
             sum(row["mib"] for row in workload["allocations"]),
             workload["peak_mib"],
@@ -174,19 +199,25 @@ def test_dashboard_serves_assets_and_persists_only_valid_same_origin_labels(
     cpu_text = "Clock type: CPU\n"
     interpretation["sources"] = {
         "cpu-text": {
-            "label": "CPU text", "path": "profiles/cpu.txt",
+            "label": "CPU text",
+            "path": "profiles/cpu.txt",
             "sha256": hashlib.sha256(cpu_text.encode()).hexdigest(),
             "size_bytes": len(cpu_text.encode()),
         },
         "missing": {
-            "label": "Not present", "path": "profiles/missing.bin",
-            "sha256": "0" * 64, "size_bytes": 0,
+            "label": "Not present",
+            "path": "profiles/missing.bin",
+            "sha256": "0" * 64,
+            "size_bytes": 0,
         },
     }
-    interpretation["metric_sources"] = [{
-        "metric": "Test CPU", "source_ids": ["cpu-text", "missing"],
-        "rule": "Read the pinned text"
-    }]
+    interpretation["metric_sources"] = [
+        {
+            "metric": "Test CPU",
+            "source_ids": ["cpu-text", "missing"],
+            "rule": "Read the pinned text",
+        }
+    ]
     stage_file = saved / "baseline.json"
     stage_file.write_text(json.dumps(interpretation))
     stage_original = stage_file.read_bytes()
@@ -263,7 +294,10 @@ def test_dashboard_serves_assets_and_persists_only_valid_same_origin_labels(
         result = client.get("/api/interpretations").json()
         assert len(result["stages"]) == 1 and "1 missing" in result["warnings"][0]
         assert result["stages"][0]["source_verification"] == {
-            "total": 2, "verified": 1, "changed": 0, "missing": 1
+            "total": 2,
+            "verified": 1,
+            "changed": 0,
+            "missing": 1,
         }
         sources = result["stages"][0]["sources"]
         assert sources["cpu-text"]["available"] is True

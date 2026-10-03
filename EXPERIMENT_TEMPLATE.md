@@ -72,6 +72,7 @@ The correctness fix is separate from performance optimizations.
 | One-pass POST offsets | Build the same batch JSON in a byte buffer and record each large field's offset as it is written. No connection, database-write or GET change. Committed as `8f5b534`. | **10/10 tests passed**; **4/4 original benchmarks passed**; **4/4 original Memray profiles passed**; **12/12 cold CPU captures correct**. Reports are listed below. |
 | S3 session experiment | Reuse the aiobotocore session, but still create and close an S3 client for each request. This isolates SDK setup from connection pooling and keeps the original benchmark loop behavior testable. | **13/13 tests passed** (10 run tests and 3 dashboard tests); **4/4 original benchmarks**, **4/4 original Memray profiles**, **12/12 cold CPU captures**, and **12/12 diagnostics** passed. Diagnostic requests: **60/60 correct**; S3 request and connection counts unchanged. One original benchmark report per stage so far. |
 | S3 session A/B repeat | Re-ran the original `make benchmark` suite three times with reuse on and three times off, in the order on–off–off–on–on–off. Each run reset the dedicated test database and bucket. The off version matched `8f5b534` in both application call sites; the on version matched `a765570`. The optimized application code was restored afterward. | **24/24 benchmark cases passed.** GET medians were consistently lower with reuse; POST was noisier. Raw reports are preserved in `measurements/session-reuse-validation/benchmark-reports/` (ignored by Git, outside the dashboard's stage series). |
+| One S3 range per GET | Read the byte span covering all three saved fields from one object, then decode each field using its existing offsets. Keep the per-field path for references to different objects; leave POST and S3 client lifetime unchanged. | **15/15 tests** (10 run, 5 dashboard), **12/12 benchmark cases**, **4/4 original Memray profiles**, **12/12 cold CPU captures** and **60/60 diagnostic requests** passed. GET S3 requests and new connections: **3 → 1 per request**. Benchmark latency changed little; see below. Uncommitted pending review. |
 
 Session A/B report medians, in milliseconds. Each cell lists three independent
 suite results; the percentage compares the median of those three values. These
@@ -90,6 +91,36 @@ uncached reports were collected with temporary source edits, so their embedded
 Git metadata still names the checked-out `a765570` commit and marks it dirty;
 the on/off assignment above is the experiment record. Files `0006`, `0009`,
 `0010` are on; `0007`, `0008`, `0011` are off.
+
+One-range GET comparison (three independent original benchmark reports per
+stage; figures are the median of each report's median, in milliseconds):
+
+| Workload | Session reuse | One S3 range | Change |
+|---|---:|---:|---:|
+| POST 500 × 10 KB | 554.2 | 539.4 | −2.7% |
+| POST 50 × 100 KB | 348.7 | 336.6 | −3.5% |
+| GET 10 KB | 41.1 | 39.3 | −4.4% |
+| GET 100 KB | 47.5 | 47.1 | −0.9% |
+
+The GET ranges overlap: 40.4–42.8 vs 38.8–40.9 ms for 10 KB; 47.0–48.6 vs
+46.4–48.3 ms for 100 KB. Do **not** claim a reliable latency improvement from
+these runs. The three one-range reports are
+`.benchmarks/Darwin-CPython-3.11-64bit/0006_baseline.json`
+and `measurements/one-s3-read-validation/benchmark-reports/0007_baseline.json`
+and `0008_baseline.json`; the latter two are kept outside the dashboard stage
+series. The session-reuse comparison reports are listed above.
+
+Diagnostics (three sessions, five measured requests per workload): both GET
+shapes changed from **3 S3 GETs / 3 new S3 connections** to **1 / 1** per
+request. POST stayed **1 / 1**. GET downloaded **23 more bytes per request**
+for the separators between fields: 34,410 → 34,433 bytes at 10 KB and
+346,881 → 346,904 bytes at 100 KB. Cold profiled first-request CPU medians
+were 0.219 → 0.192 s and 0.339 → 0.312 s for the two GETs; this Yappi scope is
+not benchmark latency. Original Memray peaks were effectively unchanged
+(GET 10 KB 9.269 → 9.233 MiB; GET 100 KB 2.595 → 2.595 MiB).
+Sources: `measurements/20261003T222053.676199Z/` (diagnostic),
+`measurements/20261003T221748.261877Z/` (cold CPU), and
+`profiles/memory/20261003T221702Z-LfPxajIS/` (original Memray).
 
 Keep `b11a9b9` as the original reference. Identify the separate correctness-fix
 revision when collecting the corrected performance baseline. The full-workload
@@ -297,7 +328,7 @@ download bodies consumed by the application; they exclude headers/TCP framing.
 | **One-pass encoding** | Original POST benchmark latency; cold profiled first-request CPU; original Memray peak | Less repeated work, lower memory use, and faster ingestion | Clean commit `8f5b534`: POST 500 median **2.107 → 0.570 s (−72.9%)**; POST 50 **0.620 → 0.360 s (−41.9%)**. Cold POST 500 first-request CPU **1.771 → 0.725 s (−59.0%)**. POST 500 peak **191.401 → 171.241 MiB (−10.5%)**; POST 50 **132.352 → 117.343 MiB (−11.3%)**. GET code unchanged. |
 | **Reuse S3 SDK session, not client** | S3 client-setup CPU, original POST/GET latency and Memray peak; correctness across benchmark event loops | Shared session may cache SDK setup work. S3 clients still open/close per request, so S3 request and connection counts are not expected to fall. Memory improvement is uncertain. | First report: GET 10 KB median **89.8 → 41.1 ms**; GET 100 KB **99.9 → 48.1 ms**. POST 500 **594.8 → 566.7 ms**; POST 50 **394.4 → 322.9 ms**. Cold profiled `get_s3_client` CPU, session 1, POST 500: **0.1666 → 0.0323 s inclusive**. Diagnostic S3 requests/connections per request: POST **1 → 1**, GET **3 → 3**. See per-workload table and limitations below. |
 | **Bulk database writes** | POST latency, ingestion throughput and database command count | Fewer database commands and faster batch ingestion | Not measured |
-| **One S3 read per run** | GET latency, S3 request count and downloaded bytes | Fewer S3 requests and faster retrieval; measure the byte-transfer tradeoff | Not measured |
+| **One S3 read per run** | GET latency, S3 request count and downloaded bytes | Fewer S3 requests; faster retrieval was a hypothesis; measure the byte-transfer tradeoff | **3 → 1 S3 requests and new connections per GET**, with +23 downloaded bytes. GET 10 KB median of three reports: **41.1 → 39.3 ms**; GET 100 KB: **47.5 → 47.1 ms**. Timing ranges overlap; latency improvement is not established. |
 
 The rows highlight each optimization's main measurements. Use the three active
 workflows (`make benchmark`, `make memprofile`, cold `make measure --passes cpu`)

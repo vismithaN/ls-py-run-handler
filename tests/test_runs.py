@@ -7,7 +7,7 @@ import pytest
 from aiobotocore.session import get_session
 from httpx import AsyncClient
 
-from ls_py_handler.api.routes.runs import Run
+from ls_py_handler.api.routes.runs import Run, get_s3_client
 from ls_py_handler.config.settings import settings
 from ls_py_handler.main import app
 from ls_py_handler.s3 import get_s3_session
@@ -62,8 +62,19 @@ async def test_create_and_get_run():
             metadata={"model": "codex", "temperature": 0.2},
         ),
     ]
-    async with AsyncClient(app=app, base_url="http://test") as client:
-        await assert_roundtrip(client, runs)
+    get_counts = []
+
+    async def counted_s3_client():
+        async for s3 in get_s3_client():
+            with patch.object(s3, "get_object", wraps=s3.get_object) as get_object:
+                yield s3
+                get_counts.append(get_object.call_count)
+
+    with patch.dict(app.dependency_overrides, {get_s3_client: counted_s3_client}):
+        async with AsyncClient(app=app, base_url="http://test") as client:
+            await assert_roundtrip(client, runs)
+
+    assert get_counts == [0, 1, 1, 1]  # POST, then one S3 GET per run.
 
 
 async def test_s3_session_reused_but_clients_remain_request_scoped():
@@ -142,6 +153,7 @@ async def test_repeated_field_content():
     ]
     async with AsyncClient(app=app, base_url="http://test") as client:
         ids = await assert_roundtrip(client, runs)
+        other_id = (await assert_roundtrip(client, [make_run(metadata=shared)]))[0]
     db = await asyncpg.connect(
         host=settings.DB_HOST,
         port=settings.DB_PORT,
@@ -156,8 +168,23 @@ async def test_repeated_field_content():
         )
         starts = [row[field].split("#", 1)[1].split(":", 1)[0] for field in row.keys()]
         assert len(set(starts)) == 3
+
+        # A reference to a different batch object still uses the old read path.
+        other_ref = await db.fetchval(
+            "SELECT metadata FROM runs WHERE id = $1", uuid.UUID(other_id)
+        )
+        await db.execute(
+            "UPDATE runs SET metadata = $1 WHERE id = $2",
+            other_ref,
+            uuid.UUID(ids[1]),
+        )
     finally:
         await db.close()
+
+    async with AsyncClient(app=app, base_url="http://test") as client:
+        response = await client.get(f"/runs/{ids[1]}")
+        assert response.status_code == 200
+        assert response.json()["metadata"] == shared
 
 
 async def test_invalid_requests_and_missing_runs():
