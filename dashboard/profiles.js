@@ -461,7 +461,7 @@ function detailedCpuTables(stage) {
   };
   const hotspotNotes = {
     'Batch search': 'Dominant request hotspot; first optimization candidate.',
-    'S3 client setup': 'Recurring setup cost; candidate after batch searching.',
+    'S3 client dependency': 'Inclusive CPU includes session and client work; profile internals before choosing which to reuse.',
     'JSON decode': 'Smaller than batch searching.',
     'Response encoding': 'Not a priority from this profile.'
   };
@@ -493,7 +493,7 @@ function renderCpuComparison(stages) {
   }));
   section.append(comparisonChart('First-request CPU by workload', 'Median of 3 fresh processes per stage · lower is better', stages, rows, 's', 3, { x: 'Workload', y: 'First-request CPU (seconds)' }));
 
-  const comparableFunctions = ['Batch search', 'S3 client setup'];
+  const comparableFunctions = ['Batch search', 'S3 client dependency'];
   const hotspotRows = comparableFunctions.map(label => ({
     label,
     values: stages.map(stage => functionResult(stage, 'post-500-10kb', label)?.inclusive_s)
@@ -541,7 +541,7 @@ function renderMemoryComparison(stages) {
   const drivers = [
     ['Batch representation', ['Serialize full batch', 'Batch buffer']],
     ['Run dictionaries', 'Run dictionary construction'],
-    ['S3 SDK setup / data', 'S3 SDK setup / data'],
+    ['S3 SDK / data', 'S3 SDK / data'],
     ['HTTP request body', 'HTTP request body'],
     ['Decoded request JSON', 'Decoded request JSON']
   ].map(([label, aliases]) => ({

@@ -112,6 +112,35 @@ def test_profile_stages_use_explicit_order(tmp_path, monkeypatch):
     assert not snapshot["warnings"]
 
 
+def test_s3_session_reuse_interpretation_is_comparable(tmp_path, monkeypatch):
+    saved = tmp_path / "interpretations"
+    saved.mkdir()
+    for name in ("baseline", "one-pass-encoder", "s3-session-reuse"):
+        source = ROOT / "reports" / "interpretations" / f"{name}.json"
+        (saved / source.name).write_bytes(source.read_bytes())
+    store = InterpretationStore(saved)
+    monkeypatch.setattr(store, "source_status", lambda source: "verified")
+
+    snapshot = store.snapshot()
+
+    assert not snapshot["warnings"]
+    assert [stage["id"] for stage in snapshot["stages"]] == [
+        "baseline", "one-pass-encoder", "s3-session-reuse"
+    ]
+    current = snapshot["stages"][-1]
+    assert current["source_verification"]["verified"] == 13
+    assert len(current["cpu"]["phase_medians"]) == 4
+    assert len(current["memory"]["workloads"]) == 4
+    assert current["cpu"]["workloads"][0]["functions"][3]["label"] == (
+        "S3 client dependency"
+    )
+    for workload in current["memory"]["workloads"]:
+        assert math.isclose(
+            sum(row["mib"] for row in workload["allocations"]),
+            workload["peak_mib"],
+        )
+
+
 def test_dashboard_serves_assets_and_persists_only_valid_same_origin_labels(
     tmp_path, monkeypatch
 ):

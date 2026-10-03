@@ -71,6 +71,25 @@ The correctness fix is separate from performance optimizations.
 |---|---|---|
 | One-pass POST offsets | Build the same batch JSON in a byte buffer and record each large field's offset as it is written. No connection, database-write or GET change. Committed as `8f5b534`. | **10/10 tests passed**; **4/4 original benchmarks passed**; **4/4 original Memray profiles passed**; **12/12 cold CPU captures correct**. Reports are listed below. |
 | S3 session experiment | Reuse the aiobotocore session, but still create and close an S3 client for each request. This isolates SDK setup from connection pooling and keeps the original benchmark loop behavior testable. | **13/13 tests passed** (10 run tests and 3 dashboard tests); **4/4 original benchmarks**, **4/4 original Memray profiles**, **12/12 cold CPU captures**, and **12/12 diagnostics** passed. Diagnostic requests: **60/60 correct**; S3 request and connection counts unchanged. One original benchmark report per stage so far. |
+| S3 session A/B repeat | Re-ran the original `make benchmark` suite three times with reuse on and three times off, in the order on–off–off–on–on–off. Each run reset the dedicated test database and bucket. The off version matched `8f5b534` in both application call sites; the on version matched `a765570`. The optimized application code was restored afterward. | **24/24 benchmark cases passed.** GET medians were consistently lower with reuse; POST was noisier. Raw reports are preserved in `measurements/session-reuse-validation/benchmark-reports/` (ignored by Git, outside the dashboard's stage series). |
+
+Session A/B report medians, in milliseconds. Each cell lists three independent
+suite results; the percentage compares the median of those three values. These
+are warm in-process API benchmarks, not cold CPU-profile timings.
+
+| Workload | Session reuse off | Session reuse on | Median reduction |
+|---|---:|---:|---:|
+| POST 500 × 10 KB | 613.4, 590.7, 577.4 | 527.1, 554.2, 579.5 | 6.2% |
+| POST 50 × 100 KB | 380.1, 341.5, 458.4 | 348.7, 335.8, 362.5 | 8.3% |
+| GET 10 KB | 87.8, 86.0, 88.7 | 40.4, 42.8, 41.1 | 53.2% |
+| GET 100 KB | 90.7, 91.4, 91.6 | 48.6, 47.0, 47.5 | 48.0% |
+
+The clear repeatable result is for GET. POST direction is favorable, but three
+suite runs are too few and too variable to claim a precise POST gain. The
+uncached reports were collected with temporary source edits, so their embedded
+Git metadata still names the checked-out `a765570` commit and marks it dirty;
+the on/off assignment above is the experiment record. Files `0006`, `0009`,
+`0010` are on; `0007`, `0008`, `0011` are off.
 
 Keep `b11a9b9` as the original reference. Identify the separate correctness-fix
 revision when collecting the corrected performance baseline. The full-workload

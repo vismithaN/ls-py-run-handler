@@ -49,7 +49,7 @@
             "inclusive_s": 0.012019
           },
           {
-            "label": "S3 client setup",
+            "label": "S3 client dependency",
             "function": "get_s3_client",
             "calls": 1,
             "self_s": 0.000019,
@@ -91,7 +91,7 @@
             "inclusive_s": 0.003265
           },
           {
-            "label": "S3 client setup",
+            "label": "S3 client dependency",
             "function": "get_s3_client",
             "calls": 1,
             "self_s": 0.000016,
@@ -105,7 +105,7 @@
         "source_id": "cpu-get-10kb-s1",
         "functions": [
           {
-            "label": "S3 client setup",
+            "label": "S3 client dependency",
             "function": "get_s3_client",
             "calls": 1,
             "self_s": 0.000014,
@@ -140,7 +140,7 @@
         "source_id": "cpu-get-100kb-s1",
         "functions": [
           {
-            "label": "S3 client setup",
+            "label": "S3 client dependency",
             "function": "get_s3_client",
             "calls": 1,
             "self_s": 0.000013,
@@ -218,7 +218,7 @@
         "source_id": "memory-post-500-10kb",
         "allocations": [
           {
-            "label": "S3 SDK setup / data",
+            "label": "S3 SDK / data",
             "mib": 43.04315185546875
           },
           {
@@ -266,7 +266,7 @@
             "mib": 32.01673984527588
           },
           {
-            "label": "S3 SDK setup / data",
+            "label": "S3 SDK / data",
             "mib": 26.916893005371094
           },
           {
@@ -310,7 +310,7 @@
             "mib": 8
           },
           {
-            "label": "S3 SDK setup / data",
+            "label": "S3 SDK / data",
             "mib": 6.514636039733887
           },
           {
@@ -334,7 +334,7 @@
         "source_id": "memory-get-100kb",
         "allocations": [
           {
-            "label": "S3 SDK setup / data",
+            "label": "S3 SDK / data",
             "mib": 6.516461372375488
           },
           {
