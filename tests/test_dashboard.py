@@ -151,6 +151,7 @@ def test_get_optimization_interpretations(tmp_path, monkeypatch):
         "whole-run-reference",
         "get-response-encoding",
         "bulk-postgres-writes",
+        "spooled-post-buffer",
     ):
         source = ROOT / "reports" / "interpretations" / f"{name}.json"
         (saved / source.name).write_bytes(source.read_bytes())
@@ -160,8 +161,8 @@ def test_get_optimization_interpretations(tmp_path, monkeypatch):
     snapshot = store.snapshot()
 
     assert not snapshot["warnings"]
-    assert [stage["order"] for stage in snapshot["stages"]] == [3, 4, 5, 6]
-    for stage, sources in zip(snapshot["stages"], (11, 15, 29, 35), strict=True):
+    assert [stage["order"] for stage in snapshot["stages"]] == [3, 4, 5, 6, 7]
+    for stage, sources in zip(snapshot["stages"], (11, 15, 29, 35, 55), strict=True):
         assert stage["source_verification"]["verified"] == sources
         assert len(stage["cpu"]["phase_medians"]) == 4
         assert stage["cpu"]["workloads"][2]["functions"][1]["calls"] == 1
@@ -179,7 +180,7 @@ def test_get_optimization_interpretations(tmp_path, monkeypatch):
         decoder = workload["functions"][2]
         assert decoder["function"] == "orjson.loads" and decoder["calls"] == 1
 
-    encoding = snapshot["stages"][-2]
+    encoding = snapshot["stages"][2]
     assert encoding["title"] == "GET response encoding"
     assert encoding["review_status"].startswith("Uncommitted")
     assert encoding["cpu"]["workloads"][0]["functions"][2]["calls"] == 6000
@@ -188,7 +189,7 @@ def test_get_optimization_interpretations(tmp_path, monkeypatch):
         assert workload["functions"][3]["calls"] == 0
         assert workload["functions"][4]["calls"] == 1
 
-    bulk = snapshot["stages"][-1]
+    bulk = snapshot["stages"][3]
     assert bulk["title"] == "Bulk PostgreSQL writes"
     assert bulk["review_status"].startswith("Uncommitted")
     assert bulk["findings"][2]["status"] == "Mixed"
@@ -198,6 +199,27 @@ def test_get_optimization_interpretations(tmp_path, monkeypatch):
         assert workload["functions"][2]["calls"] == serializations
         assert workload["functions"][4]["calls"] == 0
         assert workload["functions"][5]["calls"] == 1
+
+    spooled = snapshot["stages"][-1]
+    assert spooled["title"] == "Spooled POST buffer (trade-off)"
+    assert spooled["review_status"].startswith("Uncommitted")
+    assert spooled["findings"][1]["status"] == "Trade-off"
+    for workload, writes in zip(
+        spooled["cpu"]["workloads"][:2], (502, 52), strict=True
+    ):
+        functions = {row["label"]: row for row in workload["functions"]}
+        assert functions["Bulk COPY"]["calls"] == 1
+        assert functions["Spool writes"]["calls"] == writes
+        assert functions["Spill to disk"]["calls"] == 1
+    for workload in spooled["memory"]["workloads"]:
+        assert len(workload["peak_repeats_mib"]) == 3
+        assert len(workload["source_ids"]) == 3
+    assert len(spooled["comparison_results"]) == 4
+    for row in spooled["comparison_results"][:2]:
+        assert row["memory_reduction_pct"] > 0
+        assert row["latency_reduction_pct"] < 0
+        assert len(row["before_benchmark_medians_ms"]) == 3
+        assert len(row["after_benchmark_medians_ms"]) == 3
 
 
 def test_dashboard_serves_assets_and_persists_only_valid_same_origin_labels(

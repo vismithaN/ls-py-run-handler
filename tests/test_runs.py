@@ -1,10 +1,13 @@
 import asyncio
 import uuid
+from tempfile import SpooledTemporaryFile
+from types import SimpleNamespace
 from unittest.mock import patch
 
 import asyncpg
 import orjson
 import pytest
+from aiobotocore.awsrequest import AioAWSResponse
 from aiobotocore.session import get_session
 from fastapi.encoders import jsonable_encoder
 from httpx import ASGITransport, AsyncClient
@@ -78,7 +81,19 @@ async def test_create_and_get_run():
 
     async def counted_s3_client():
         async for s3 in get_s3_client():
+            put_object = s3.put_object
+
+            async def checked_upload(put_object=put_object, **kwargs):
+                body = kwargs["Body"]
+                assert body.seekable() and body.tell() == 0
+                data = body.read()
+                assert len(data) == kwargs["ContentLength"]
+                assert data == orjson.dumps(runs)  # Identical compact batch JSON.
+                body.seek(0)
+                return await put_object(**kwargs)
+
             with (
+                patch.object(s3, "put_object", checked_upload),
                 patch.object(s3, "get_object", wraps=s3.get_object) as get_object,
                 patch.object(orjson, "loads", wraps=orjson.loads) as loads,
                 patch(
@@ -143,13 +158,53 @@ async def test_generated_ids():
 
 
 async def test_large_payload():
-    run = make_run(
-        inputs={"text": "i" * (100 * 1024)},
-        outputs={"text": "o" * (100 * 1024)},
-        metadata={"text": "m" * (100 * 1024)},
-    )
-    async with AsyncClient(app=app, base_url="http://test") as client:
-        await assert_roundtrip(client, [run])
+    buffers = []
+    upload_attempts = []
+
+    def track_buffer(**kwargs):
+        buffer = SpooledTemporaryFile(**kwargs)
+        buffers.append(buffer)
+        return buffer
+
+    async def retrying_s3_client():
+        async for s3 in get_s3_client():
+            send = s3._endpoint.http_session.send
+
+            async def retry_once(request, send=send):
+                if request.method == "PUT":
+                    upload_attempts.append(request.body.tell())
+                    if len(upload_attempts) == 1:
+                        # Consume the file, then make the SDK retry a 503.
+                        request.body.read()
+                        response = AioAWSResponse(
+                            request.url, 503, {"content-type": "application/xml"}, None
+                        )
+                        response._content = b"<Error><Code>SlowDown</Code></Error>"
+                        return response
+                return await send(request)
+
+            with patch.object(s3._endpoint.http_session, "send", retry_once):
+                yield s3
+
+    with patch("ls_py_handler.api.routes.runs.SpooledTemporaryFile", track_buffer):
+        async with AsyncClient(app=app, base_url="http://test") as client:
+            for size_kb in (100, 512):
+                run = make_run(
+                    inputs={"text": "i" * (size_kb * 1024)},
+                    outputs={"text": "o" * (size_kb * 1024)},
+                    metadata={"text": "m" * (size_kb * 1024)},
+                )
+                if size_kb == 512:
+                    with patch.dict(
+                        app.dependency_overrides,
+                        {get_s3_client: retrying_s3_client},
+                    ):
+                        await assert_roundtrip(client, [run])
+                else:
+                    await assert_roundtrip(client, [run])
+                assert buffers[-1].closed
+                assert buffers[-1]._rolled == (size_kb == 512)
+    assert upload_attempts == [0, 0]  # The retry rewinds the seekable body.
 
 
 async def test_nested_json_and_special_characters():
@@ -333,5 +388,37 @@ async def test_missing_storage_object():
             assert response.status_code == 503, response.text
             assert response.json() == {"detail": "Stored run data is unavailable"}
             await assert_roundtrip(client, [make_run("After failed S3 read")])
+
+            failed_buffers = []
+
+            async def fail_upload(**kwargs):
+                buffer = kwargs["Body"]
+                failed_buffers.append(buffer)
+                assert buffer.tell() == 0
+                buffer.read(100)
+                raise RuntimeError("Injected S3 upload failure")
+
+            async def failing_s3_client():
+                yield SimpleNamespace(put_object=fail_upload)
+
+            failed_run = make_run(inputs={"text": "x" * (1100 * 1024)})
+            transport = ASGITransport(app=app, raise_app_exceptions=False)
+            with patch.dict(
+                app.dependency_overrides, {get_s3_client: failing_s3_client}
+            ):
+                async with AsyncClient(
+                    transport=transport, base_url="http://test"
+                ) as failing_client:
+                    response = await failing_client.post("/runs", json=[failed_run])
+                    assert response.status_code == 500
+            assert len(failed_buffers) == 1
+            assert failed_buffers[0]._rolled and failed_buffers[0].closed
+            assert (
+                await db.fetchval(
+                    "SELECT count(*) FROM runs WHERE id = $1",
+                    uuid.UUID(failed_run["id"]),
+                )
+                == 0
+            )
     finally:
         await db.close()

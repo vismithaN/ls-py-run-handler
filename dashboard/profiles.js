@@ -442,7 +442,7 @@ function renderProfileOverview(stages) {
   const changed = html('article');
   changed.append(html('h3', '', 'What changed'), html('p', '', current.findings?.[0]?.optimization || current.title));
   const evidence = html('article');
-  evidence.append(html('h3', '', 'Why it improved'), html('p', '', current.findings?.[0]?.interpretation || current.summary));
+  evidence.append(html('h3', '', 'What the measurements show'), html('p', '', current.findings?.[0]?.interpretation || current.summary));
   const candidate = nextExperiment(stages);
   const next = html('article');
   next.append(html('h3', '', 'Next optimization candidate'), html('p', '', candidate ? `${candidate.optimization} — ${candidate.evidence}` : 'Use the detailed evidence below to select the next experiment.'));
