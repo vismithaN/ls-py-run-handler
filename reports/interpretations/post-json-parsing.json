@@ -2,10 +2,10 @@
   "schema_version": 1,
   "id": "post-json-parsing",
   "order": 8,
-  "title": "POST JSON parsing",
-  "commit": "f999bdcc26e37e87a58337630c070e96af60203a",
+  "title": "POST JSON parsing (not retained)",
+  "commit": "49fbd6781d0c8079daa9cdd870cb7fe0d6cdaad4",
   "application_sha256": "00a95ab2fcfb1ebc1d559c4550b3f37cd2ed2b4c824fe2b8c6bb4846256c9c9d",
-  "review_status": "Uncommitted parsing experiment · modest memory savings; awaiting review",
+  "review_status": "Not retained · tested, committed and reverted; modest memory savings did not justify mixed latency and custom parsing complexity",
   "summary": "POST 500 × 10 KB: 151.4 → 145.9 MiB; POST 50 × 100 KB: 109.5 → 105.8 MiB. POST 500 × 10 KB: 370.9 → 397.7 ms; POST 50 × 100 KB: 346.1 → 320.9 ms.",
   "cpu": {
     "profiler": "Yappi 1.7.6 · CPU clock · built-ins enabled",
@@ -481,13 +481,22 @@
   },
   "findings": [
     {
-      "title": "POST memory",
+      "title": "Decision · tested, not retained",
       "evidence": "POST 500 × 10 KB: 151.4 → 145.9 MiB; POST 50 × 100 KB: 109.5 → 105.8 MiB",
-      "interpretation": "POST 500 × 10 KB: 3.6% lower; POST 50 × 100 KB: 3.4% lower. Modest whole-test savings; the decoded payload group was not entirely removable memory.",
-      "optimization": "Parse raw JSON directly into validated Run models",
+      "interpretation": "Tested, not retained. Memory fell 3.6% / 3.4%, but POST latency was mixed and overall request CPU roughly unchanged. Custom decoding, compatibility fallbacks, error translation and manual schema handling were not justified by these savings.",
+      "optimization": "Revert direct JSON parsing; keep standard FastAPI request validation",
       "validation": "Three original Memray captures per version/workload; compare restored in-memory POST with this candidate, not the rejected spool experiment.",
       "evidence_type": "Original whole-test Memray",
-      "status": "Improved"
+      "status": "Not retained"
+    },
+    {
+      "title": "Cost of not retaining",
+      "evidence": "Foregone whole-test memory savings: POST 500 5.475 MiB (3.6%); POST 50 3.743 MiB (3.4%)",
+      "interpretation": "Give up these modest memory savings and the POST 50 latency benefit observed in this repeat. Keep the simpler request path; no equivalent production RAM or latency cost has been established.",
+      "optimization": "Accept the measured memory trade-off in favor of simpler validation",
+      "validation": "Differences derived from the pinned fresh before/after comparison; POST 500 timing ranges overlap, so rejection is a trade-off decision, not proof of a universal slowdown.",
+      "evidence_type": "Paired measurements and retention decision",
+      "status": "Accepted trade-off"
     },
     {
       "title": "Why savings are limited",
@@ -679,6 +688,7 @@
   ],
   "finding_mode": "results",
   "limitations": [
+    "Historical experiment: tested and committed in 49fbd67, then reverted to the application from f999bdc. These numbers describe the rejected candidate, not a new measurement of the restored code. Benchmark, CPU, memory recordings and source snapshots are preserved.",
     "Incremental results use a fresh frozen version of the restored application, not the rejected spooled-upload implementation. Stage graphs also retain rejected experiments as labelled history.",
     "Only POST parsing changes. Original workloads/options, GET, DB COPY, S3 encoding, cached session and request-scoped clients are unchanged.",
     "No expected saving percentage was promised; the removed JSON attribution was not a guaranteed amount of recoverable memory. Required Run models still occupy RAM.",
@@ -688,7 +698,7 @@
     "HTTP validation status codes and field locations are preserved; some validation error types, wording and URL fields differ. The JSON request schema is now inline rather than a Run component reference; it remains required and retains the same Run field definitions.",
     "Serial localhost measurements do not establish production p95, concurrency throughput, or memory-leak behavior. Small GET timing changes must not be attributed to this POST change.",
     "Earlier attempts (20261004T061239Z-33fe5318e12a and 20261004T062207Z-37b8da7e61ce) are archived separately. They preceded nesting/error-handler compatibility fixes; this complete repeat measures the final source and does not mix their results.",
-    "The candidate is uncommitted. The Git revision identifies the base checkout; application hashes and exact source snapshots identify measured code. No push made."
+    "The Git revision identifies the saved experimental implementation. Original measurement metadata was captured while it was uncommitted; its application hash matches that implementation. The current application uses the standard FastAPI parsing path again. No push made."
   ],
   "metric_sources": [
     {

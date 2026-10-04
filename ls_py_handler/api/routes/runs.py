@@ -1,15 +1,13 @@
 import asyncio
 import io
-import json
 import uuid
 from typing import Any, Dict, List, Optional
 
 import asyncpg
 import orjson
-from fastapi import APIRouter, Depends, HTTPException, Request, status
-from fastapi.exceptions import RequestValidationError
+from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.responses import ORJSONResponse
-from pydantic import UUID4, BaseModel, Field, TypeAdapter, ValidationError
+from pydantic import UUID4, BaseModel, Field
 
 from ls_py_handler.config.settings import settings
 from ls_py_handler.s3 import get_s3_session
@@ -24,70 +22,6 @@ class Run(BaseModel):
     inputs: Dict[str, Any] = {}
     outputs: Dict[str, Any] = {}
     metadata: Dict[str, Any] = {}
-
-
-run_batch_adapter = TypeAdapter(List[Run])
-
-
-async def parse_runs(request: Request) -> List[Run]:
-    """Parse and validate raw JSON together, without a separate decoded payload."""
-    body = await request.body()
-    if not body:
-        raise RequestValidationError(
-            [
-                {
-                    "type": "missing",
-                    "loc": ("body",),
-                    "msg": "Field required",
-                    "input": None,
-                }
-            ]
-        )
-    media_type = request.headers.get("content-type", "application/json")
-    media_type = media_type.split(";", 1)[0].strip().lower()
-    if media_type != "application/json" and not (
-        media_type.startswith("application/") and media_type.endswith("+json")
-    ):
-        raise RequestValidationError(
-            [
-                {
-                    "type": "list_type",
-                    "loc": ("body",),
-                    "msg": "Input should be a valid list",
-                    "input": body.decode(errors="replace"),
-                }
-            ]
-        )
-    try:
-        return run_batch_adapter.validate_json(body)
-    except ValidationError as error:
-        errors = error.errors(include_url=False)
-        if errors[0]["type"] == "json_invalid":
-            # Keep the old parser for uncommon encodings/deep JSON it accepts,
-            # and retain its syntax-error locations. Normal JSON stays one-pass.
-            try:
-                return run_batch_adapter.validate_python(json.loads(body))
-            except json.JSONDecodeError as syntax_error:
-                raise RequestValidationError(
-                    [
-                        {
-                            "type": "json_invalid",
-                            "loc": ("body", syntax_error.pos),
-                            "msg": "JSON decode error",
-                            "input": {},
-                            "ctx": {"error": syntax_error.msg},
-                        }
-                    ]
-                ) from syntax_error
-            except ValidationError as legacy_error:
-                errors = legacy_error.errors(include_url=False)
-            except (UnicodeDecodeError, ValueError, RecursionError) as decode_error:
-                raise HTTPException(
-                    400, "There was an error parsing the body"
-                ) from decode_error
-        for item in errors:
-            item["loc"] = ("body", *item["loc"])
-        raise RequestValidationError(errors) from error
 
 
 async def get_db_conn():
@@ -118,36 +52,9 @@ async def get_s3_client():
         yield client
 
 
-@router.post(
-    "",
-    status_code=status.HTTP_201_CREATED,
-    openapi_extra={
-        "requestBody": {
-            "required": True,
-            "content": {
-                "application/json": {
-                    "schema": {
-                        "type": "array",
-                        "title": "Runs",
-                        "items": Run.model_json_schema(),
-                    }
-                }
-            },
-        },
-        "responses": {
-            "422": {
-                "description": "Validation Error",
-                "content": {
-                    "application/json": {
-                        "schema": {"$ref": "#/components/schemas/HTTPValidationError"}
-                    }
-                },
-            }
-        },
-    },
-)
+@router.post("", status_code=status.HTTP_201_CREATED)
 async def create_runs(
-    runs: List[Run] = Depends(parse_runs),
+    runs: List[Run],
     db: asyncpg.Connection = Depends(get_db_conn),
     s3: Any = Depends(get_s3_client),
 ):

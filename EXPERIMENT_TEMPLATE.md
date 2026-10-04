@@ -95,6 +95,22 @@ approved or implemented changes.
   `measurements/bulk-post-tail-debug/20261004T041804Z-f9c992191ee6/` and
   `measurements/bulk-post-http-debug/20261004T042347Z-1d1d473ed0e4/`.
 
+### 2026-10-04 — POST JSON parsing retention decision
+
+**Tested, not retained.** Saved the tested experiment in `49fbd67`, then restored
+the application and run tests from `f999bdc`. Keep the benchmark, CPU and memory
+reports, source snapshots and dashboard interpretation as rejected experiment
+history. The dashboard labels both the profile stage and benchmark point
+**not retained**.
+
+| Trade-off | Cost / justification |
+|---|---|
+| Keeping the change | Custom parsing, compatibility fallbacks, error translation and manual API-schema handling. POST 500 median was 7.2% higher; POST 50 was 7.3% lower; overall profiled CPU roughly unchanged. Mixed latency, not proof that all POSTs became slower. |
+| Not retaining it | Give up **5.475 MiB / 3.743 MiB (3.6% / 3.4%)** of whole-test peak memory savings for POST 500 / POST 50, plus the POST 50 latency benefit observed in this repeat. These are not established production RAM or latency costs. |
+
+Decision: the modest savings did not justify the extra request-validation
+maintenance and mixed performance. Retain the simpler standard FastAPI path.
+
 ## Correctness test results
 
 Tests: [`tests/test_runs.py`](tests/test_runs.py). Executed: 2026-10-02.
@@ -621,7 +637,7 @@ download bodies consumed by the application; they exclude headers/TCP framing.
 | **Bulk database writes** | POST latency, ingestion throughput and database command count | Fewer database commands and faster batch ingestion | Not measured |
 | **One S3 read per run** | GET latency, S3 request count and downloaded bytes | Fewer S3 requests; faster retrieval was a hypothesis; measure the byte-transfer tradeoff | **3 → 1 S3 requests and new connections per GET**, with +23 downloaded bytes. GET 10 KB median of three reports: **41.1 → 39.3 ms**; GET 100 KB: **47.5 → 47.1 ms**. Timing ranges overlap; latency improvement is not established. |
 | **Spooled POST upload — not retained** | Original POST/GET latency, cold Yappi CPU and original Memray whole-test peak | Reduce the outgoing batch held in RAM; disk/file-body overhead may increase latency | POST 500: **151.4 → 143.6 MiB (−5.1%)**, median **324.6 → 362.4 ms (+11.7%)**. POST 50: **111.5 → 105.6 MiB (−5.3%)**, median **322.7 → 350.5 ms (+8.6%)**. GET latency and memory essentially unchanged. **Rejected:** the modest memory saving did not justify the POST 500 latency cost. |
-| **Direct POST JSON parsing — under review** | Original POST latency and whole-test Memray peak; cold Yappi CPU; validation compatibility | Parse raw bytes directly into validated Run models, removing the intermediate decoded request tree. Lower memory/CPU is a hypothesis; no saving percentage promised. | POST 500: **151.4 → 145.9 MiB (−3.6%)**, median **370.9 → 397.7 ms (+7.2%)**. POST 50: **109.5 → 105.8 MiB (−3.4%)**, median **346.1 → 320.9 ms (−7.3%)**. Overall profiled POST CPU is roughly unchanged. **Modest memory savings; mixed latency. Uncommitted, awaiting review.** |
+| **Direct POST JSON parsing — tested, not retained** | Original POST latency and whole-test Memray peak; cold Yappi CPU; validation compatibility | Parse raw bytes directly into validated Run models, removing the intermediate decoded request tree. Lower memory/CPU is a hypothesis; no saving percentage promised. | POST 500: **151.4 → 145.9 MiB (−3.6%)**, median **370.9 → 397.7 ms (+7.2%)**. POST 50: **109.5 → 105.8 MiB (−3.4%)**, median **346.1 → 320.9 ms (−7.3%)**. Overall profiled POST CPU is roughly unchanged. **Rejected:** modest memory savings did not justify mixed latency and custom validation maintenance. Reports retained; code reverted. |
 
 The rows highlight each optimization's main measurements. Use the three active
 workflows (`make benchmark`, `make memprofile`, cold `make measure --passes cpu`)
@@ -721,14 +737,14 @@ interpretation, labelled **not retained**. These are historical experiment
 results, not measurements of the restored code. **Validation after revert:
 15/15 tests passed.** No push made.
 
-### Direct POST JSON parsing — experiment result
+### Direct POST JSON parsing — tested, not retained
 
-Normal requests now use one reusable `TypeAdapter(List[Run]).validate_json(body)`:
+The tested candidate used `TypeAdapter(List[Run]).validate_json(body)`:
 raw bytes → validated models, without a separate decoded Python payload tree.
-The old decoder remains a fallback for uncommon encodings and deeply nested JSON.
-HTTP validation statuses and field locations remain; some error types/wording and
-the inline OpenAPI schema representation differ. Upload buffering, storage bytes,
-GET, database COPY and S3 lifetimes are unchanged.
+The old decoder was a fallback for uncommon encodings and deeply nested JSON.
+HTTP validation statuses and field locations were preserved; some error types/
+wording and the inline OpenAPI schema representation differed. Upload buffering,
+storage bytes, GET, database COPY and S3 lifetimes were unchanged.
 
 Repeated **B–A–A–B–B–A**: three original benchmark suites and three original
 Memray suites per version; three cold CPU captures per workload/version.
@@ -751,7 +767,17 @@ The benchmark graph uses the first completed after report
 (`0010_post-json-parsing.json`); the interpretation uses all three per version.
 Earlier captures are preserved separately but excluded: they preceded nesting
 or validation-error compatibility fixes. Memory is whole-test tracked allocation,
-not server RSS. **Candidate remains uncommitted and under review.**
+not server RSS. **Decision: tested, not retained.** Saved the experiment in
+`49fbd67`; reverted its implementation and related run-test changes, restoring
+`f999bdc`'s standard FastAPI request parsing. Keep all reports and the numeric
+grouping dashboard improvements. The rejection accepts the lost 3.6% / 3.4%
+whole-test memory savings in exchange for simpler validation; mixed latency and
+roughly unchanged overall CPU did not justify retaining the custom parser.
+**Validation after revert: 15/15 tests passed** (ten run tests and five dashboard
+tests), with the two existing FastAPI deprecation warnings. Verified the restored
+application fingerprint matches the fresh before version. Temporary verification
+database/bucket were removed; shared test resources and all raw reports were
+preserved. No new benchmark/profile point or push was made for the revert.
 
 ## Final graphs and explanation
 

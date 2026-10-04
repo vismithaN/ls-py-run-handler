@@ -277,8 +277,11 @@ def test_get_optimization_interpretations(tmp_path, monkeypatch):
         assert len(row["after_benchmark_medians_ms"]) == 3
 
     parsing = snapshot["stages"][-1]
-    assert parsing["title"] == "POST JSON parsing"
-    assert parsing["review_status"].startswith("Uncommitted")
+    assert parsing["title"] == "POST JSON parsing (not retained)"
+    assert parsing["review_status"].startswith("Not retained")
+    assert parsing["commit"].startswith("49fbd67")
+    assert parsing["findings"][0]["status"] == "Not retained"
+    assert parsing["findings"][1]["title"] == "Cost of not retaining"
     assert parsing["memory"]["grouping"]["label_overrides"] == {
         "Model validation": "Request JSON parsing + validation"
     }
