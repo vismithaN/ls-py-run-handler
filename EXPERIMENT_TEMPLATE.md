@@ -621,6 +621,7 @@ download bodies consumed by the application; they exclude headers/TCP framing.
 | **Bulk database writes** | POST latency, ingestion throughput and database command count | Fewer database commands and faster batch ingestion | Not measured |
 | **One S3 read per run** | GET latency, S3 request count and downloaded bytes | Fewer S3 requests; faster retrieval was a hypothesis; measure the byte-transfer tradeoff | **3 → 1 S3 requests and new connections per GET**, with +23 downloaded bytes. GET 10 KB median of three reports: **41.1 → 39.3 ms**; GET 100 KB: **47.5 → 47.1 ms**. Timing ranges overlap; latency improvement is not established. |
 | **Spooled POST upload — not retained** | Original POST/GET latency, cold Yappi CPU and original Memray whole-test peak | Reduce the outgoing batch held in RAM; disk/file-body overhead may increase latency | POST 500: **151.4 → 143.6 MiB (−5.1%)**, median **324.6 → 362.4 ms (+11.7%)**. POST 50: **111.5 → 105.6 MiB (−5.3%)**, median **322.7 → 350.5 ms (+8.6%)**. GET latency and memory essentially unchanged. **Rejected:** the modest memory saving did not justify the POST 500 latency cost. |
+| **Direct POST JSON parsing — under review** | Original POST latency and whole-test Memray peak; cold Yappi CPU; validation compatibility | Parse raw bytes directly into validated Run models, removing the intermediate decoded request tree. Lower memory/CPU is a hypothesis; no saving percentage promised. | POST 500: **151.4 → 145.9 MiB (−3.6%)**, median **370.9 → 397.7 ms (+7.2%)**. POST 50: **109.5 → 105.8 MiB (−3.4%)**, median **346.1 → 320.9 ms (−7.3%)**. Overall profiled POST CPU is roughly unchanged. **Modest memory savings; mixed latency. Uncommitted, awaiting review.** |
 
 The rows highlight each optimization's main measurements. Use the three active
 workflows (`make benchmark`, `make memprofile`, cold `make measure --passes cpu`)
@@ -719,6 +720,38 @@ consistent 11.7% POST 500 latency increase and added disk dependence.
 interpretation, labelled **not retained**. These are historical experiment
 results, not measurements of the restored code. **Validation after revert:
 15/15 tests passed.** No push made.
+
+### Direct POST JSON parsing — experiment result
+
+Normal requests now use one reusable `TypeAdapter(List[Run]).validate_json(body)`:
+raw bytes → validated models, without a separate decoded Python payload tree.
+The old decoder remains a fallback for uncommon encodings and deeply nested JSON.
+HTTP validation statuses and field locations remain; some error types/wording and
+the inline OpenAPI schema representation differ. Upload buffering, storage bytes,
+GET, database COPY and S3 lifetimes are unchanged.
+
+Repeated **B–A–A–B–B–A**: three original benchmark suites and three original
+Memray suites per version; three cold CPU captures per workload/version.
+Memory savings are modest and repeatable. POST 500 parsing + model attribution
+is **31.3 → 28.9 MiB**, not a saving of the whole former 22.7 MiB JSON group.
+The validated data still needs RAM; groups describe stacks at the recorded peak.
+
+Latency is **mixed**. POST 500 suite medians overlap; POST 50 after-suite medians
+are all lower in this repeat. Means: **391.4 → 419.1 ms** and
+**408.4 → 326.4 ms**, respectively. Cold request CPU:
+**0.475 → 0.466 s** and **0.399 → 0.404 s**—no consistent overall CPU gain.
+GET code is unchanged; its Memray capture includes POST seeding.
+**15 tests passed**; still ten run test functions. Temporary experiment resources
+were cleaned; shared test resources were not reset.
+
+Final reports/source snapshots:
+`measurements/post-json-validation/20261004T063926Z-1898efc8965d/`.
+Dashboard: `reports/interpretations/post-json-parsing.json`, with 56 pinned sources.
+The benchmark graph uses the first completed after report
+(`0010_post-json-parsing.json`); the interpretation uses all three per version.
+Earlier captures are preserved separately but excluded: they preceded nesting
+or validation-error compatibility fixes. Memory is whole-test tracked allocation,
+not server RSS. **Candidate remains uncommitted and under review.**
 
 ## Final graphs and explanation
 

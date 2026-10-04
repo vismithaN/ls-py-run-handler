@@ -153,6 +153,7 @@ def test_get_optimization_interpretations(tmp_path, monkeypatch):
         "get-response-encoding",
         "bulk-postgres-writes",
         "spooled-post-buffer",
+        "post-json-parsing",
     ):
         source = ROOT / "reports" / "interpretations" / f"{name}.json"
         (saved / source.name).write_bytes(source.read_bytes())
@@ -162,8 +163,10 @@ def test_get_optimization_interpretations(tmp_path, monkeypatch):
     snapshot = store.snapshot()
 
     assert not snapshot["warnings"]
-    assert [stage["order"] for stage in snapshot["stages"]] == [3, 4, 5, 6, 7]
-    for stage, sources in zip(snapshot["stages"], (11, 15, 29, 35, 55), strict=True):
+    assert [stage["order"] for stage in snapshot["stages"]] == [3, 4, 5, 6, 7, 8]
+    for stage, sources in zip(
+        snapshot["stages"], (11, 15, 29, 35, 55, 56), strict=True
+    ):
         assert stage["source_verification"]["verified"] == sources
         assert len(stage["cpu"]["phase_medians"]) == 4
         assert stage["cpu"]["workloads"][2]["functions"][1]["calls"] == 1
@@ -250,7 +253,7 @@ def test_get_optimization_interpretations(tmp_path, monkeypatch):
         assert workload["functions"][4]["calls"] == 0
         assert workload["functions"][5]["calls"] == 1
 
-    spooled = snapshot["stages"][-1]
+    spooled = snapshot["stages"][4]
     assert spooled["title"] == "Spooled POST buffer (not retained)"
     assert spooled["review_status"].startswith("Not retained")
     assert spooled["findings"][0]["status"] == "Not retained"
@@ -270,6 +273,30 @@ def test_get_optimization_interpretations(tmp_path, monkeypatch):
     for row in spooled["comparison_results"][:2]:
         assert row["memory_reduction_pct"] > 0
         assert row["latency_reduction_pct"] < 0
+        assert len(row["before_benchmark_medians_ms"]) == 3
+        assert len(row["after_benchmark_medians_ms"]) == 3
+
+    parsing = snapshot["stages"][-1]
+    assert parsing["title"] == "POST JSON parsing"
+    assert parsing["review_status"].startswith("Uncommitted")
+    assert parsing["memory"]["grouping"]["label_overrides"] == {
+        "Model validation": "Request JSON parsing + validation"
+    }
+    for workload, serializations in zip(
+        parsing["cpu"]["workloads"][:2], (6000, 600), strict=True
+    ):
+        functions = {row["label"]: row for row in workload["functions"]}
+        assert functions["JSON serialization"]["calls"] == serializations
+        assert functions["Bulk COPY"]["calls"] == 1
+        assert functions["Separate request JSON decode"]["calls"] == 0
+        assert functions["Direct request parser"]["calls"] == 1
+        assert functions["JSON parsing + validation"]["calls"] == 1
+    assert len(parsing["comparison_results"]) == 4
+    for workload, row in zip(
+        parsing["memory"]["workloads"], parsing["comparison_results"], strict=True
+    ):
+        assert len(workload["peak_repeats_mib"]) == 3
+        assert len(workload["source_ids"]) == 3
         assert len(row["before_benchmark_medians_ms"]) == 3
         assert len(row["after_benchmark_medians_ms"]) == 3
 
@@ -337,7 +364,13 @@ def test_dashboard_serves_assets_and_persists_only_valid_same_origin_labels(
         assert client.get("/").status_code == 200
         assert client.get("/assets/dashboard.js").status_code == 200
         assert client.get("/assets/styles.css").status_code == 200
-        assert client.get("/assets/profiles.js").status_code == 200
+        profile_script = client.get("/assets/profiles.js")
+        assert profile_script.status_code == 200
+        assert (
+            "['Decoded request JSON', 'Model validation', "
+            "'Request JSON parsing + validation']"
+            in profile_script.text
+        )
         page = client.get("/").text
         assert 'role="tablist"' in page
         assert 'aria-orientation="vertical"' in page

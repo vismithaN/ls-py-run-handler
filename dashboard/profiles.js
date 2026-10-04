@@ -558,7 +558,7 @@ function renderMemoryComparison(stages) {
     ['Run dictionaries', 'Run dictionary construction'],
     ['S3 SDK / data', 'S3 SDK / data'],
     ['HTTP request body', 'HTTP request body'],
-    ['Decoded request JSON', 'Decoded request JSON']
+    ['Request JSON parsing + validation', ['Decoded request JSON', 'Model validation', 'Request JSON parsing + validation']]
   ].map(([label, aliases]) => ({
     label,
     values: stages.map(stage => allocation(stage, 'post-500-10kb', aliases))

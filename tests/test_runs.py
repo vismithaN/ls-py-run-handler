@@ -9,7 +9,7 @@ from aiobotocore.session import get_session
 from fastapi.encoders import jsonable_encoder
 from httpx import ASGITransport, AsyncClient
 
-from ls_py_handler.api.routes.runs import Run, get_s3_client
+from ls_py_handler.api.routes.runs import Run, get_s3_client, run_batch_adapter
 from ls_py_handler.config.settings import settings
 from ls_py_handler.main import app
 from ls_py_handler.s3 import get_s3_session
@@ -93,9 +93,17 @@ async def test_create_and_get_run():
     with (
         patch.dict(app.dependency_overrides, {get_s3_client: counted_s3_client}),
         patch.object(asyncpg.Connection, "copy_records_to_table", counted_copy),
+        patch.object(
+            run_batch_adapter, "validate_json", wraps=run_batch_adapter.validate_json
+        ) as parse,
+        patch(
+            "starlette.requests.Request.json",
+            side_effect=AssertionError("Separate JSON decoding must not run"),
+        ),
     ):
         async with AsyncClient(app=app, base_url="http://test") as client:
             await assert_roundtrip(client, runs)
+        assert parse.call_count == 1
 
     assert get_counts == [0, 1, 1, 1]  # POST, then one S3 GET per run.
     assert decode_counts == [0, 3, 3, 3]  # Decode three fields from one S3 read.
@@ -140,6 +148,30 @@ async def test_generated_ids():
         del run["id"]
     async with AsyncClient(app=app, base_url="http://test") as client:
         await assert_roundtrip(client, runs)
+        # Preserve JSON media types, generated IDs and legacy byte encodings.
+        for encoding, content_type in (
+            ("utf-8", None),
+            ("utf-8", "application/vnd.runs+json"),
+            ("utf-8-sig", "application/json"),
+            ("utf-16", "application/json"),
+            ("utf-32", "application/json"),
+        ):
+            body = orjson.dumps(runs).decode().encode(encoding)
+            headers = {"Content-Type": content_type} if content_type else {}
+            response = await client.post("/runs", content=body, headers=headers)
+            assert response.status_code == 201, response.text
+            for sent, run_id in zip(runs, response.json()["run_ids"], strict=True):
+                assert uuid.UUID(run_id).version == 4
+                fetched = await client.get(f"/runs/{run_id}")
+                assert fetched.json() == {**sent, "id": run_id}
+    schema = app.openapi()["paths"]["/runs"]["post"]["requestBody"]
+    assert schema["required"] is True
+    assert schema["content"]["application/json"]["schema"]["type"] == "array"
+    assert (
+        schema["content"]["application/json"]["schema"]["items"]
+        == Run.model_json_schema()
+    )
+    assert "422" in app.openapi()["paths"]["/runs"]["post"]["responses"]
 
 
 async def test_large_payload():
@@ -161,6 +193,14 @@ async def test_nested_json_and_special_characters():
         metadata={"tags": ["one", "two"], "details": {"enabled": True}},
     )
     async with AsyncClient(app=app, base_url="http://test") as client:
+        await assert_roundtrip(client, [run])
+        # Direct parsing has a lower nesting limit than the original decoder.
+        # The fallback keeps previously supported, storable JSON working.
+        nested = 0
+        for _ in range(210):
+            nested = [nested]
+        run["inputs"] = {"deep": nested}
+        run["id"] = str(uuid.uuid4())
         await assert_roundtrip(client, [run])
 
 
@@ -246,6 +286,35 @@ async def test_invalid_requests_and_missing_runs():
             del invalid["trace_id"]
             response = await client.post("/runs", json=[make_run("Valid"), invalid])
             assert response.status_code == 422
+            assert response.json()["detail"][0]["loc"] == ["body", 1, "trace_id"]
+
+            for body, content_type, status_code in (
+                (b"", "application/json", 422),
+                (b"[", "application/json", 422),
+                (b"{}", "application/json", 422),
+                (b"null", "application/json", 422),
+                (b"[]", "text/plain", 422),
+                (b"\xff", "application/json", 400),
+            ):
+                response = await client.post(
+                    "/runs", content=body, headers={"Content-Type": content_type}
+                )
+                assert response.status_code == status_code, response.text
+            for fields in (
+                {"trace_id": "not-a-uuid"},
+                {"name": 123},
+                {"inputs": []},
+                {"metadata": None},
+            ):
+                invalid = {**make_run(), **fields}
+                for encoding in ("utf-8", "utf-8-sig", "utf-16", "utf-32"):
+                    response = await client.post(
+                        "/runs",
+                        content=orjson.dumps([invalid]).decode().encode(encoding),
+                        headers={"Content-Type": "application/json"},
+                    )
+                    assert response.status_code == 422, response.text
+                    assert response.json()["detail"][0]["loc"][:2] == ["body", 0]
 
             assert await db.fetchval("SELECT count(*) FROM runs") == before_rows
             after_keys = set()
