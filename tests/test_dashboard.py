@@ -143,27 +143,61 @@ def test_s3_session_reuse_interpretation_is_comparable(tmp_path, monkeypatch):
         )
 
 
-def test_one_s3_read_interpretation(tmp_path, monkeypatch):
+def test_get_optimization_interpretations(tmp_path, monkeypatch):
     saved = tmp_path / "interpretations"
     saved.mkdir()
-    source = ROOT / "reports" / "interpretations" / "one-s3-read.json"
-    (saved / source.name).write_bytes(source.read_bytes())
+    for name in (
+        "one-s3-read",
+        "whole-run-reference",
+        "get-response-encoding",
+        "bulk-postgres-writes",
+    ):
+        source = ROOT / "reports" / "interpretations" / f"{name}.json"
+        (saved / source.name).write_bytes(source.read_bytes())
     store = InterpretationStore(saved)
     monkeypatch.setattr(store, "source_status", lambda source: "verified")
 
     snapshot = store.snapshot()
 
     assert not snapshot["warnings"]
-    stage = snapshot["stages"][0]
-    assert stage["order"] == 3
-    assert stage["source_verification"]["verified"] == 11
-    assert len(stage["cpu"]["phase_medians"]) == 4
-    assert stage["cpu"]["workloads"][2]["functions"][1]["calls"] == 1
-    for workload in stage["memory"]["workloads"]:
-        assert math.isclose(
-            sum(row["mib"] for row in workload["allocations"]),
-            workload["peak_mib"],
-        )
+    assert [stage["order"] for stage in snapshot["stages"]] == [3, 4, 5, 6]
+    for stage, sources in zip(snapshot["stages"], (11, 15, 29, 35), strict=True):
+        assert stage["source_verification"]["verified"] == sources
+        assert len(stage["cpu"]["phase_medians"]) == 4
+        assert stage["cpu"]["workloads"][2]["functions"][1]["calls"] == 1
+        for workload in stage["memory"]["workloads"]:
+            assert math.isclose(
+                sum(row["mib"] for row in workload["allocations"]),
+                workload["peak_mib"],
+            )
+    current = snapshot["stages"][1]
+    assert current["title"] == "One JSON decode per GET (not retained)"
+    assert current["findings"][0]["status"] == "Not retained"
+    assert current["commit"].startswith("87d8666")
+    assert current["cpu"]["workloads"][0]["functions"][2]["calls"] == 500
+    for workload in current["cpu"]["workloads"][2:]:
+        decoder = workload["functions"][2]
+        assert decoder["function"] == "orjson.loads" and decoder["calls"] == 1
+
+    encoding = snapshot["stages"][-2]
+    assert encoding["title"] == "GET response encoding"
+    assert encoding["review_status"].startswith("Uncommitted")
+    assert encoding["cpu"]["workloads"][0]["functions"][2]["calls"] == 6000
+    for workload in encoding["cpu"]["workloads"][2:]:
+        assert workload["functions"][2]["calls"] == 3
+        assert workload["functions"][3]["calls"] == 0
+        assert workload["functions"][4]["calls"] == 1
+
+    bulk = snapshot["stages"][-1]
+    assert bulk["title"] == "Bulk PostgreSQL writes"
+    assert bulk["review_status"].startswith("Uncommitted")
+    assert bulk["findings"][2]["status"] == "Mixed"
+    for workload, serializations in zip(
+        bulk["cpu"]["workloads"][:2], (6000, 600), strict=True
+    ):
+        assert workload["functions"][2]["calls"] == serializations
+        assert workload["functions"][4]["calls"] == 0
+        assert workload["functions"][5]["calls"] == 1
 
 
 def test_dashboard_serves_assets_and_persists_only_valid_same_origin_labels(

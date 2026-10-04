@@ -11,6 +11,90 @@ and GET 100 KB per field. These are the benchmark scenarios. Keep the supplied
 `make benchmark` and `make memprofile` workflows as the primary measurements;
 `make measure` is an optional, separate harness for supplementary measurements.
 
+## Logbook
+
+Record dated discussion conclusions and decisions here, not only implementation
+steps. Keep measured outcomes separate from hypotheses; proposals are not
+approved or implemented changes.
+
+### 2026-10-03 — optimization review and decisions
+
+- **One-pass encoder — retained improvement.** Removed the repeated full-batch
+  searches: **1,500 → 0** for POST 500. Cold first-request CPU fell
+  **1.771 → 0.725 s**; whole-test tracked memory fell **191.4 → 171.2 MiB**.
+  These are profiler measurements, not interchangeable with benchmark latency.
+
+- **S3 session reuse — retained improvement.** Repeated on/off benchmarks
+  supported lower GET latency: **87.8 → 41.1 ms** at 10 KB and
+  **91.4 → 47.5 ms** at 100 KB (**53.2% / 48.0%** lower). POST was noisier.
+  Clients and connections are still request-scoped; operation counts did not
+  decrease. Lower Memray peaks do not prove equivalent full-process RAM savings.
+  These repeats preceded the one-range GET; the benefit with that read path has
+  not been separately isolated.
+
+- **One S3 read per GET — request consolidation, not a demonstrated latency
+  improvement.** The old **three reads ran concurrently**, not sequentially.
+  Requests and observed new S3 connections fell **3 → 1**, but JSON decodes
+  stayed **3 → 3**. Benchmark medians changed **41.1 → 39.3 ms** and
+  **47.5 → 47.1 ms**, with overlapping ranges; memory was effectively unchanged.
+  Keep the change as fewer S3 operations, without claiming a reliable latency
+  or memory gain. No database migration was needed.
+
+- **One JSON decode per GET / full-run DB reference — tested, then reverted.**
+  The experiment added nullable `run_ref` through a migration. POST serialization
+  calls fell **6,000 → 500 for the 500-run batch** and **600 → 50 for the
+  50-run batch**; GET decodes fell **3 → 1**, while S3 reads stayed **1 → 1**.
+  There was **no demonstrated latency gain**. POST 500 profiled CPU fell 6.2%,
+  but its memory peak was effectively unchanged; other memory decreases were
+  single-capture observations. Decision: these benefits did not justify schema
+  migration, cross-version compatibility and deployment/rollback complexity.
+  Reverted the code and migration; kept all reports. Removed its three benchmark
+  repeats from the dashboard, preserving them in
+  `measurements/whole-run-reference-validation/benchmark-reports/`.
+  Submission wording: **implemented and tested, then rejected**, not never tried.
+
+- **Next experiments — discussed only, not approved or implemented.** Use the
+  retained version's CPU/memory profiles and diagnostics as inputs. First
+  candidate: GET response serialization; other candidates: bulk database writes
+  and application-lifetime S3 clients. Measure elapsed database/S3 phases too,
+  because CPU profiles miss waiting. Change one thing at a time, verify
+  correctness, and repeat unprofiled benchmarks before deciding to retain it.
+
+- **GET response encoding — retained code change, not an optimization.**
+  Decision recorded on **2026-10-03**: keep the direct `ORJSONResponse` return
+  to reduce unnecessary response-conversion/encoding work on already
+  JSON-compatible data. Do **not** count this as a potential or completed
+  optimization in the experiment summary or submission. POST, S3 reads, database
+  schema and connection lifetimes are unchanged. Preserve the tests, benchmark
+  results and CPU/memory reports as validation history, not an optimization
+  claim. The implementation remains **uncommitted**.
+
+- **Bulk PostgreSQL writes — implemented and measured on 2026-10-03.**
+  Replace 500/50 sequential INSERTs with one binary COPY inside a transaction.
+  POST 500 median latency **540.9 → 321.3 ms (40.6% lower)**; database-write
+  elapsed phase **226.6 → 12.6 ms**. Measured dispatches become **3**:
+  BEGIN, COPY, COMMIT. POST 50 has a lower median but a worse mean; record it as
+  mixed, not an across-the-board gain. Memory is unchanged. Recommendation:
+  retain for the clear large-batch benefit; investigate smaller-batch tails
+  before production latency claims. No schema, S3, GET, serialization or
+  connection-lifetime change. Reports preserved; **not committed**.
+
+- **POST 50 tail debugging — 2026-10-03.** Separately traced **200 requests**
+  (100 per version), then **80 HTTP-detail requests**; all persisted contents
+  verified. Database-write median **26.4 → 4.8 ms** in the first pass,
+  **25.3 → 5.6 ms** in the follow-up. Large upload pauses occurred before and
+  after COPY, with **zero S3 retries**. Example: a **771.7 ms** request spent
+  **636.5 ms uploading**, versus **10.3 ms writing to PostgreSQL** and
+  **0.3 ms in GC**. Connection setup was **1.3 ms**; local body writing took
+  **235.2 ms**, followed by **380.5 ms** until final response headers.
+  Conclusion: COPY saves database time; variable upload/network/server waiting
+  can overwhelm the smaller batch's ~20 ms saving. Exact MinIO storage versus
+  Docker/network cause remains unconfirmed. These are instrumented diagnostics,
+  **not new benchmark points**. Original benchmarks/application code unchanged;
+  raw reports, CSVs and interpretation saved under
+  `measurements/bulk-post-tail-debug/20261004T041804Z-f9c992191ee6/` and
+  `measurements/bulk-post-http-debug/20261004T042347Z-1d1d473ed0e4/`.
+
 ## Correctness test results
 
 Tests: [`tests/test_runs.py`](tests/test_runs.py). Executed: 2026-10-02.
@@ -72,22 +156,121 @@ The correctness fix is separate from performance optimizations.
 | One-pass POST offsets | Build the same batch JSON in a byte buffer and record each large field's offset as it is written. No connection, database-write or GET change. Committed as `8f5b534`. | **10/10 tests passed**; **4/4 original benchmarks passed**; **4/4 original Memray profiles passed**; **12/12 cold CPU captures correct**. Reports are listed below. |
 | S3 session experiment | Reuse the aiobotocore session, but still create and close an S3 client for each request. This isolates SDK setup from connection pooling and keeps the original benchmark loop behavior testable. | **13/13 tests passed** (10 run tests and 3 dashboard tests); **4/4 original benchmarks**, **4/4 original Memray profiles**, **12/12 cold CPU captures**, and **12/12 diagnostics** passed. Diagnostic requests: **60/60 correct**; S3 request and connection counts unchanged. One original benchmark report per stage so far. |
 | S3 session A/B repeat | Re-ran the original `make benchmark` suite three times with reuse on and three times off, in the order on–off–off–on–on–off. Each run reset the dedicated test database and bucket. The off version matched `8f5b534` in both application call sites; the on version matched `a765570`. The optimized application code was restored afterward. | **24/24 benchmark cases passed.** GET medians were consistently lower with reuse; POST was noisier. Raw reports are preserved in `measurements/session-reuse-validation/benchmark-reports/` (ignored by Git, outside the dashboard's stage series). |
-| One S3 range per GET | Read the byte span covering all three saved fields from one object, then decode each field using its existing offsets. Keep the per-field path for references to different objects; leave POST and S3 client lifetime unchanged. | **15/15 tests** (10 run, 5 dashboard), **12/12 benchmark cases**, **4/4 original Memray profiles**, **12/12 cold CPU captures** and **60/60 diagnostic requests** passed. GET S3 requests and new connections: **3 → 1 per request**. Benchmark latency changed little; see below. Uncommitted pending review. |
-| Complete-run S3 reference | Replace field slicing for new rows with one `run_ref` covering the full run JSON, including its braces. POST serializes each run once; GET performs one range request and one JSON decode. Migration `81b1d309a02a` adds a nullable reference column; old rows retain their previous read path. | **15/15 tests** (10 run, 5 dashboard) and **4/4 original benchmark scenarios** passed in isolated resources. Verified migration of an existing row, safe downgrade/re-upgrade, refusal of a downgrade that would lose new references, and errors for truncated/invalid/wrong-run data. No CPU or memory profile collected for this replacement. |
+| One S3 range per GET | Read the byte span covering all three saved fields from one object, then decode each field using its existing offsets. Keep the per-field path for references to different objects; leave POST and S3 client lifetime unchanged. Committed as `7b0961b`; retained after the full-run experiment. | **15/15 tests** (10 run, 5 dashboard), **12/12 benchmark cases**, **4/4 original Memray profiles**, **12/12 cold CPU captures** and **60/60 diagnostic requests** passed. GET S3 requests and new connections: **3 → 1 per request**. Benchmark latency changed little; see below. |
+| One JSON decode per GET — not retained | Tested a full-run `run_ref`, one serialization per run, and one GET decode, with nullable-column migration `81b1d309a02a`. Experiment commit: `87d8666`. Reverted the application/migration changes; restored `7b0961b` storage behavior. | Original collection: **15/15 tests**, **12/12 benchmark cases**, **4/4 Memray profiles**, **12/12 cold CPU captures** passed. No demonstrated latency gain; modest profiled CPU/memory observations did not justify migration and rollout complexity. All reports and the dashboard experiment remain available. |
+| GET response encoding — code change only | Keep the direct `ORJSONResponse` return to reduce response-conversion/encoding work. **Not a potential or completed optimization.** No POST, storage, schema or connection change. Uncommitted. | **15/15 tests**, **24/24 benchmark cases**, **8/8 original Memray profiles** and **24/24 cold CPU captures** passed. Preserve all measured results and reports as validation history; do not count them as a selected optimization. |
+| Bulk PostgreSQL writes | Replace only the POST INSERT loop with a transactional binary COPY. IDs are already generated by the application; return them in request order after successful commit. No migration. Uncommitted. | **15/15 tests**, **24/24 original benchmark cases**, **8/8 original Memray profiles**, **24/24 accepted cold CPU captures**, and **120/120 diagnostic requests** passed. Duplicate-ID failures leave no partial database rows. Clear POST 500 latency gain; POST 50 is mixed. |
 
-Complete-run references have the form `s3://bucket/object#start:end/run`, with an
-exclusive end offset. New rows store `id`, `trace_id`, `name`, and `run_ref`;
-the legacy field-reference columns remain null. Apply `make db-migrate` before
-using the updated application against the development database. Validation used
-temporary databases/buckets and removed only those resources afterward.
+### GET response encoding — code-change validation
 
-### Production rollout requirements — pending implementation
+Purpose: reduce response-encoding work by removing the extra conversion walk.
+**Retain the code change, but exclude it from potential/completed optimizations.**
+The original hypothesis targeted GET CPU and latency; the measurements below
+remain a factual record of that evaluation, not a selected optimization claim.
+Fresh retained-version before/after suites ran **before–after–after–before–before–after**.
+Latency below is the median of three report medians; CPU is the median of three
+cold first-request profiles; memory is one original whole-test Memray peak per version.
 
-The production assumption requires a staged rollout. The current reader supports
-both reference formats, but POST writes only `run_ref`. Old application instances
-cannot read those new rows because their field-reference columns are null. Do not
-use this write behavior in a mixed-version production rollout without the
-compatibility steps below.
+| Workload | Median latency (ms), before → after | Profiled request CPU (s), before → after | Tracked peak (MiB), before → after | Interpretation |
+|---|---:|---:|---:|---|
+| POST 500 × 10 KB | 551.7 → 554.2 | 0.583 → 0.584 | 151.393 → 151.393 | Unchanged control; no POST code change. |
+| POST 50 × 100 KB | 339.6 → 334.7 | 0.424 → 0.411 | 112.449 → 110.486 | Control variation; do not attribute this to GET encoding. |
+| GET 10 KB | 40.9 → 41.0 | 0.196 → 0.179 | 9.240 → 9.220 | No clear latency/memory gain; profiled CPU 8.4% lower. |
+| GET 100 KB | 46.6 → 41.7 | 0.314 → 0.181 | 2.595 → 2.595 | Latency 10.6% lower; profiled CPU 42.3% lower; memory unchanged. |
+
+GET 100 KB report medians were **46.5–47.9 ms before** and **41.6–42.2 ms after**:
+all three after reports were faster than all three before reports. The CPU
+profiles confirm `jsonable_encoder` calls **6,157 → 0** (10 KB: **631 → 0**).
+GET still uses **one S3 read and three storage JSON decodes**; HTTP output is
+serialized once. Removing recursive calls also removes profiler overhead, so
+the CPU percentages must not be applied to unprofiled latency or production CPU.
+Memory peaks include the whole benchmark test, not server-only RAM or per-request
+memory. These local serial benchmarks do not establish production p95 or concurrent capacity.
+
+All raw reports, source snapshots, commands and cleanup evidence are under
+`measurements/get-response-encoding-validation/20261004T025259Z-01c0342b29cc/`;
+`comparison.json` contains the reproducible comparison. CPU recordings are in
+`profiles/cpu/20261004T025553.290265Z/` (before) and
+`profiles/cpu/20261004T025851.238611Z/` (after). Original Memray recordings are in
+`profiles/memory/20261004T025259Z-get-response-{before,after}-01c0342b29cc/`.
+The dashboard point is the **first completed after report**, not a selected best
+run; the **10.6%** interpretation uses all six reports. The profile interpretation
+pins **29 source files** in `reports/interpretations/get-response-encoding.json`.
+Only isolated experiment databases/buckets were reset and removed; shared test
+resources were not reset. Original benchmark code/settings and Makefile are unchanged.
+
+### Bulk PostgreSQL writes — experiment result
+
+Hypothesis: batching database writes reduces repeated exchanges and POST latency.
+Only the INSERT loop changed; the before version includes the retained GET
+encoding **code change**, which is not counted as an optimization. Six original
+suites ran **before–after–after–before–before–after**. Median below means median
+of three report medians; mean averages all saved round samples.
+
+| Workload | Median latency (ms), before → after | Mean latency (ms), before → after | Interpretation |
+|---|---:|---:|---|
+| POST 500 × 10 KB | 540.9 → 321.3 | 550.8 → 325.7 | **40.6% lower median**; all after-suite medians are faster than all before-suite medians. |
+| POST 50 × 100 KB | 342.1 → 309.7 | 348.0 → 369.7 | Median 9.5% lower, but mean 6.2% higher; **mixed**, not a uniform gain. |
+| GET 10 KB | 40.5 → 38.4 | 40.2 → 40.4 | Unchanged code; overlapping ranges/control variation. |
+| GET 100 KB | 42.2 → 41.7 | 42.2 → 42.0 | Unchanged code; no demonstrated GET improvement. |
+
+POST 500 suite medians: **526.0–555.8 ms before**, **309.9–340.8 ms after**.
+POST 50 ranges overlap; after samples include **550.5 ms and 1,011.0 ms**.
+Their cause is not established. Keep them in the reports; do not claim improved
+small-batch tails, production p95 or concurrent throughput from these local runs.
+
+| Supporting measurement | POST 500, before → after | POST 50, before → after |
+|---|---:|---:|
+| Database-write elapsed phase (ms) | 226.6 → 12.6 | 23.6 → 4.8 |
+| Measured database dispatches / POST | 500 → 3 | 50 → 3 |
+| Cold profiled first-request CPU (s) | 0.596 → 0.469 (**21.4% lower**) | 0.409 → 0.401 (2.0% lower) |
+| Whole-test Memray peak (MiB) | 151.393 → 151.393 | 110.486 → 110.486 |
+
+The separate diagnostics used fixed paired fixtures, three sessions and five
+measured requests per workload/version. Database phase excludes connection
+setup, S3 upload and response encoding; it spans the INSERT loop or BEGIN through
+COPY and COMMIT. The **3** dispatches are **BEGIN + COPY + COMMIT**, not one total
+database command; driver metadata preparation is not a measured INSERT or wire
+message. Each POST still makes **one S3 PUT, one new DB connection and one new
+S3 connection**. Serialization remains **6,000/600 calls**. CPU percentages
+include profiler overhead; memory is a whole-test allocation peak, not RSS.
+
+Correctness covers generated/explicit IDs, response order, all stored references
+and field contents, duplicate IDs within a batch and against existing rows,
+rollback, and a successful write after failure. The ten named run tests remain
+ten. Database failures still return the existing HTTP **500**. Rollback prevents
+partial **database** rows, but does not remove an S3 object uploaded before the
+failure; cross-store atomicity/cleanup is an unchanged limitation.
+
+Raw reports, source snapshots, saved collector/analysis scripts and cleanup
+records: `measurements/bulk-post-validation/20261004T033743Z-813debfb1f4a/`.
+`comparison.json` holds the numeric comparison. CPU profiles:
+`profiles/cpu/20261004T034029.839300Z/` (before),
+`profiles/cpu/20261004T034320.733428Z/` (after). Memray:
+`profiles/memory/20261004T033743Z-bulk-post-{before,after}-813debfb1f4a/`.
+The dashboard adds the **first completed after report**, not the best run or the
+three-report aggregate; its interpretation pins **35 source files** in
+`reports/interpretations/bulk-postgres-writes.json`. Original benchmark source,
+settings and Makefile are unchanged. Only unique experiment resources were reset
+and removed; shared resources were not reset. **No commit made.**
+
+The rejected experiment used `s3://bucket/object#start:end/run`, with an
+exclusive end offset; its new rows stored `run_ref` instead of field references.
+The retained implementation stores the original three field references and reads
+their combined span with **one S3 GET and three JSON decodes**. The experimental
+migration has been removed from the working tree. Validation used temporary
+databases/buckets and removed only those resources; no shared database downgrade
+or data deletion is part of this revert.
+
+### Rejected experiment — production rollout cost
+
+The full-run design would require a staged production rollout. Its experimental
+reader supported both formats, but POST wrote only `run_ref`; old application
+instances could not read those new rows. The requirements below explain the
+complexity considered when rejecting it; they are **not the active deployment
+plan**. Two application versions would coexist temporarily during rollout, not
+permanently. Immediate backfill is optional while the legacy read path remains;
+backfill becomes necessary to retire that format.
 
 | Phase | Required behavior | Gate before continuing |
 |---|---|---|
@@ -100,15 +283,87 @@ compatibility steps below.
 
 Production acceptance tests must cover both cross-version read/write combinations,
 rollback after new runs have been written, and interrupted/restarted backfill.
-Temporary dual writing, rollout switches, and the backfill job are **not yet
-implemented**. The experiment measures the final whole-run path; its benchmark
-does not establish that a mixed-version deployment is safe.
+Temporary dual writing, rollout switches, and the backfill job were **not
+implemented**. The experiment measured the final whole-run path; its benchmark
+did not establish that a mixed-version deployment was safe.
 
 One validation benchmark report is saved at
 `measurements/run-range-validation-37e38105787c/benchmarks/Darwin-CPython-3.11-64bit/0001_run-range.json`.
 Its medians are POST 500 **585.2 ms**, POST 50 **343.2 ms**, GET 10 KB **42.7 ms**,
 and GET 100 KB **49.4 ms**. This single report verifies the workloads run; it does
 not establish an additional latency or memory improvement.
+
+### One JSON decode per GET — tested, then reverted
+
+| Expected benefit | Measured outcome vs one-range GET | Decision |
+|---|---|---|
+| Fewer JSON calls should reduce CPU/latency; one reference should simplify reads. | GET decodes **3 → 1**, S3 reads **1 → 1**. No demonstrated latency gain. POST 500 profiled CPU **−6.2%**, memory effectively unchanged; other memory decreases came from single captures. | **Not retained:** no demonstrated benefit sufficient to justify a schema migration, cross-version compatibility, rollout/rollback checks, and eventual format retirement. |
+
+Submission explanation: “I implemented and measured a full-run reference design,
+but the results did not justify its production migration and deployment cost.
+I reverted it and retained the simpler one-S3-read design, preserving the reports
+as evidence of the decision.”
+
+Revert verification: application code matches `7b0961b`; migration head is back
+to `26a9efc758a0`. **15/15 tests passed** using an isolated database/bucket,
+which were removed afterward. Both shared databases were checked read-only:
+neither had `run_ref`, and neither was modified. **127 report/source files are
+byte-for-byte unchanged**; the dashboard preserves the experiment as **not
+retained**, with **15/15 pinned sources verified**. Revert changes are uncommitted.
+
+Compare the previous **one-range, three-field-decode** implementation with
+`87d8666`. Each cell is **previous → complete-run**. Latency is the median of
+three independent benchmark-report medians; CPU is the median of three cold
+first-request profiles. Memory is one original Memray whole-test peak per stage.
+
+| Workload | Benchmark median (ms) | First-request CPU (s) | Peak tracked memory (MiB) |
+|---|---:|---:|---:|
+| POST 500 × 10 KB | 539.4 → 539.4 | 0.584 → 0.548 | 151.393 → 151.374 |
+| POST 50 × 100 KB | 336.6 → 357.7 | 0.415 → 0.417 | 113.449 → 111.877 |
+| GET 10 KB | 39.3 → 42.6 | 0.192 → 0.198 | 9.233 → 9.225 |
+| GET 100 KB | 47.1 → 48.1 | 0.312 → 0.314 | 2.595 → 2.445 |
+
+- **Latency:** no demonstrated gain. Observed changes are approximately 0.0%,
+  +6.3%, +8.4%, and +2.1%, respectively. GET 10 KB report medians increased
+  from 38.8–40.9 to 41.1–43.3 ms. These are historical before/after collections,
+  not alternating A/B runs; do not attribute every difference to the code.
+- **CPU:** POST 500 first-request CPU is 6.2% lower. Across all three profiles,
+  POST serialization calls fall from 6,000 → 500 (POST 50: 600 → 50).
+  POST 500 handler inclusive CPU falls from 0.130 → 0.092 s. GET decoding
+  calls fall from 3 → 1, but still parse essentially the same payload;
+  GET 100 KB decode CPU is only 0.383 → 0.369 ms. GET CPU does not meaningfully
+  improve. Profiling CPU is not wall-clock benchmark latency.
+- **Memory:** POST 50 is 1.4% lower and GET 100 KB is 5.8% lower in these
+  captures; POST 500 and GET 10 KB are effectively unchanged. Single whole-test
+  peaks are observations, not proof of a repeatable per-request memory saving.
+- **Structural result:** one stored reference and one JSON decode for new rows.
+  S3 GET count remains **1 → 1** versus the previous optimization; this change
+  does not remove another network request.
+
+Saved reports for `87d8666` (clean worktree during collection):
+
+| Report | Location |
+|---|---|
+| Three original benchmark suites (archived outside the benchmark dashboard) | `measurements/whole-run-reference-validation/benchmark-reports/0007_whole-run-reference.json`, `0008_whole-run-reference.json`, `0009_whole-run-reference.json` |
+| Four original Memray recordings | `profiles/memory/20261004T000943Z-whole-run-reference-f2f6dc2b3e42/` |
+| Twelve cold Yappi profiles | `profiles/cpu/20261004T001316.404826Z/session-{1,2,3}/<workload>/` |
+| CPU summary, samples and cleanup records | `measurements/20261004T001316.404826Z/summary.csv` and `session-{1,2,3}/<workload>/cpu/` |
+
+The rejected experiment's three benchmark reports were moved outside `.benchmarks/`
+without changing their contents, so the benchmark dashboard shows only the
+baseline and retained optimizations. CPU/memory reports and their **not retained**
+profile interpretation remain available.
+
+The benchmark and memory commands used the original pytest workloads/settings
+against a fresh, uniquely named real database/bucket, with resets between suites;
+only the report label/output directory and isolated storage names changed.
+CPU command: `make measure MEASURE_ARGS="--stage whole-run-reference --passes cpu"`.
+CPU fixtures, harness/dependency fingerprints, Python and service configuration
+match the preceding stage. All 12 captures are accepted with successful cleanup.
+The preceding stage's pinned CPU/Memory sources are in
+`reports/interpretations/one-s3-read.json`; its three benchmark paths are listed
+in the one-range comparison below. Keep all raw reports; performance artifacts
+are Git-ignored.
 
 Session A/B report medians, in milliseconds. Each cell lists three independent
 suite results; the percentage compares the median of those three values. These

@@ -6,6 +6,7 @@ from typing import Any, Dict, List, Optional
 import asyncpg
 import orjson
 from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi.responses import ORJSONResponse
 from pydantic import UUID4, BaseModel, Field
 
 from ls_py_handler.config.settings import settings
@@ -61,7 +62,7 @@ async def create_runs(
     Create new runs in batch.
 
     Takes a JSON array of Run objects, uploads them to MinIO,
-    and stores one reference to each complete run in PostgreSQL.
+    and stores references to certain fields in PostgreSQL.
     """
     if not runs:
         raise HTTPException(status_code=400, detail="No runs provided")
@@ -77,12 +78,22 @@ async def create_runs(
     for index, run in enumerate(runs):
         if index:
             batch.write(b",")
-        start = batch.tell()
-        batch.write(orjson.dumps(run.model_dump()))
-        run_refs.append(
-            f"s3://{settings.S3_BUCKET_NAME}/{object_key}"
-            f"#{start}:{batch.tell()}/run"
-        )
+        batch.write(b"{")
+        field_refs = {}
+        for field_index, (key, value) in enumerate(run.model_dump().items()):
+            if field_index:
+                batch.write(b",")
+            batch.write(orjson.dumps(key) + b":")
+            start = batch.tell()
+            encoded = orjson.dumps(value)
+            batch.write(encoded)
+            if key in ("inputs", "outputs", "metadata"):
+                field_refs[key] = (
+                    f"s3://{settings.S3_BUCKET_NAME}/{object_key}"
+                    f"#{start}:{start + len(encoded)}/{key}"
+                )
+        batch.write(b"}")
+        run_refs.append(field_refs)
     batch.write(b"]")
     batch_data = batch.getvalue()
 
@@ -94,27 +105,29 @@ async def create_runs(
         ContentType="application/json",
     )
 
-    # Store references in PG
-    inserted_ids = []
-
-    for run, run_ref in zip(runs, run_refs, strict=True):
-        run_id = await db.fetchval(
-            """
-            INSERT INTO runs (id, trace_id, name, run_ref)
-            VALUES ($1, $2, $3, $4)
-            RETURNING id
-            """,
+    # Send all references together; a failed batch must not leave partial rows.
+    records = (
+        (
             run.id,
             run.trace_id,
             run.name,
-            run_ref,
+            field_refs["inputs"],
+            field_refs["outputs"],
+            field_refs["metadata"],
         )
-        inserted_ids.append(str(run_id))
+        for run, field_refs in zip(runs, run_refs, strict=True)
+    )
+    async with db.transaction():
+        await db.copy_records_to_table(
+            "runs",
+            records=records,
+            columns=("id", "trace_id", "name", "inputs", "outputs", "metadata"),
+        )
 
-    return {"status": "created", "run_ids": inserted_ids}
+    return {"status": "created", "run_ids": [str(run.id) for run in runs]}
 
 
-@router.get("/{run_id}", status_code=status.HTTP_200_OK)
+@router.get("/{run_id}", status_code=status.HTTP_200_OK, response_class=ORJSONResponse)
 async def get_run(
     run_id: UUID4,
     db: asyncpg.Connection = Depends(get_db_conn),
@@ -126,7 +139,7 @@ async def get_run(
     # Fetch the run from the PG
     row = await db.fetchrow(
         """
-        SELECT id, trace_id, name, run_ref, inputs, outputs, metadata
+        SELECT id, trace_id, name, inputs, outputs, metadata
         FROM runs
         WHERE id = $1
         """,
@@ -157,8 +170,6 @@ async def get_run(
         return bucket, key, None, None
 
     async def fetch_range(bucket, key, start, end):
-        if start < 0 or end <= start:
-            raise ValueError("Invalid S3 byte range")
         response = await s3.get_object(
             Bucket=bucket, Key=key, Range=f"bytes={start}-{end - 1}"
         )
@@ -176,29 +187,12 @@ async def get_run(
 
     fields = ("inputs", "outputs", "metadata")
     try:
-        if run_data["run_ref"]:
-            bucket, key, offsets, _ = parse_s3_ref(run_data["run_ref"])
-            if not bucket or not key or not offsets:
-                raise ValueError("Invalid run reference")
-            # The range includes the run's opening and closing braces.
-            stored_run = orjson.loads(await fetch_range(bucket, key, *offsets))
-            if (
-                not isinstance(stored_run, dict)
-                or set(stored_run) != set(Run.model_fields)
-                or stored_run["id"] != str(run_data["id"])
-                or stored_run["trace_id"] != str(run_data["trace_id"])
-                or stored_run["name"] != run_data["name"]
-                or not all(isinstance(stored_run[field], dict) for field in fields)
-            ):
-                raise ValueError("S3 range does not contain the expected run")
-            return stored_run
-
-        # Rows written before the migration still have field-level references.
         refs = [parse_s3_ref(run_data[field]) for field in fields]
         if (
             all(bucket and key and offsets for bucket, key, offsets, _ in refs)
             and len({(bucket, key) for bucket, key, _, _ in refs}) == 1
         ):
+            # One range covers the three fields without fetching the full batch.
             bucket, key = refs[0][:2]
             start = min(offsets[0] for _, _, offsets, _ in refs)
             end = max(offsets[1] for _, _, offsets, _ in refs)
@@ -208,6 +202,7 @@ async def get_run(
                 for _, _, offsets, _ in refs
             ]
         else:
+            # Older references may point to different S3 objects.
             values = await asyncio.gather(*(fetch_field(ref) for ref in refs))
     except Exception as e:
         raise HTTPException(
@@ -217,11 +212,14 @@ async def get_run(
 
     inputs, outputs, metadata = values
 
-    return {
-        "id": str(run_data["id"]),
-        "trace_id": str(run_data["trace_id"]),
-        "name": run_data["name"],
-        "inputs": inputs,
-        "outputs": outputs,
-        "metadata": metadata,
-    }
+    # S3 fields are already decoded JSON values; skip another conversion walk.
+    return ORJSONResponse(
+        {
+            "id": str(run_data["id"]),
+            "trace_id": str(run_data["trace_id"]),
+            "name": run_data["name"],
+            "inputs": inputs,
+            "outputs": outputs,
+            "metadata": metadata,
+        }
+    )
