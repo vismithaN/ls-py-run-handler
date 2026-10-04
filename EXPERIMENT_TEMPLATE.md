@@ -111,6 +111,119 @@ history. The dashboard labels both the profile stage and benchmark point
 Decision: the modest savings did not justify the extra request-validation
 maintenance and mixed performance. Retain the simpler standard FastAPI path.
 
+### 2026-10-04 — Concurrent POST memory check — incomplete
+
+Single-request results for the payload-lifetime change were modest: whole-test
+Memray savings **3.8% / 2.5%**, with mixed latency. Before accepting or rejecting
+the checkpoint, test whether releasing Run models earlier helps when requests
+overlap. This is a hypothesis, not an established production-capacity gain.
+
+| Experiment | Target measurements | Expected outcome | Result |
+|---|---|---|---|
+| Before `b08cd4e` versus payload-lifetime checkpoint `7fe2538`; both original POST workloads; 1, 2, 4, 8 overlapping requests | Server RSS in MiB; successful requests/s; p95 latency; errors; observed server concurrency | Less server RAM at comparable throughput and acceptable latency, or no worthwhile benefit | Pilot passed; main comparison incomplete — no accepted result |
+
+Separate real HTTP server and load-generator processes; one server worker,
+fixed payloads, fresh server per trial, three warm-up requests and three repeats
+per version/condition, alternating **B–A–A–B–B–A**. Use a dedicated temporary
+database/bucket, not shared test resources. Keep original benchmarks, profiles,
+application code and dashboard unchanged. Save raw samples and source hashes.
+
+This first check uses fixed-concurrency clients: each sends its next request
+after the previous finishes. Slower responses therefore reduce offered traffic;
+lower RAM alone is not a capacity win. Check completed throughput and latency
+together. Sample server RSS externally; do not multiply whole-test Memray peaks
+by concurrency or include load-generator RAM. Stop safely if RAM/errors exceed
+the experiment guardrails. No production SLO or enforced memory budget has been
+chosen, so this does not establish maximum production capacity.
+
+**Run outcome:** corrected two-second pilot **8/8 passed**, excluded from final
+results. Before correctness **10/10** and after correctness/dashboard **15/15**
+passed. Main run completed **14/48 trials**; trial 15 returned HTTP 500 and
+logged S3 `PutObject: IncompleteBody`. Host free disk fell from about **1.7 GiB
+to 65 MiB**. Timing was highly variable; disk pressure is an observed blocker,
+not a proven cause of that upload error. **Do not claim a RAM/capacity improvement
+from this incomplete run.** Dedicated database/bucket removed successfully;
+partial reports and all source snapshots kept. No application change, revert,
+dashboard update or commit made. Rerun needs at least **5 GiB free host disk**;
+the harness now checks before starting and stops below **2 GiB**.
+After cleanup, host free space recovered to about **3.2 GiB**, still below the
+new 5 GiB preflight requirement.
+
+Evidence: `measurements/payload-concurrency/20261004T184846Z-babd86acdb77/`.
+Readable outcome: that folder's `FINDINGS.md`. The local, detachable harness is
+`measurements/payload-concurrency/run.py`; original make targets are unchanged.
+
+### 2026-10-04 — Concurrent POST memory check — fresh rerun completed
+
+User freed disk space; preflight now reports about **27 GiB available**. Restart
+the entire paired comparison, not only the unfinished cells. Same one-worker
+server, fixed payloads, three warm-ups, eight-second dispatch window plus drain,
+1/2/4/8 overlapping clients and **three repeats/version/condition** (48 trials).
+The earlier incomplete run and all pilots are excluded. Disk/RSS guardrails
+remain enabled. **48/48 trials completed, 1,423 measured POSTs, zero errors.**
+Correctness before/after: **10/10 and 15/15 passed**. Every trial's expected
+database row count and two exact GET round trips passed. Dedicated database and
+bucket removed successfully; about **24 GiB** free disk remained afterward.
+
+Values below are medians across three fresh-server trials per version/condition.
+RSS is actual server RAM; requests/s means successful **POST batches/s**.
+
+| POST workload | Concurrent clients | Peak RSS MiB, before → after | RAM change | Batches/s, before → after | p95 ms, before → after |
+|---|---:|---|---:|---|---|
+| 500 × 10 KB | 1 | 200.2 → 204.1 | +1.9% | 2.78 → 2.67 | 425 → 457 |
+| 500 × 10 KB | 2 | 282.2 → 280.3 | −0.7% | 3.58 → 3.73 | 794 → 646 |
+| 500 × 10 KB | 4 | 418.8 → 401.6 | −4.1% | 3.94 → 3.96 | 1,329 → 1,191 |
+| 500 × 10 KB | 8 | 637.8 → 624.7 | −2.0% | 2.40 → 3.39 | 4,184 → 2,794 |
+| 50 × 100 KB | 1 | 275.7 → 186.0 | −32.5% | 3.23 → 2.71 | 349 → 411 |
+| 50 × 100 KB | 2 | 291.8 → 253.4 | −13.2% | 4.06 → 4.11 | 555 → 589 |
+| 50 × 100 KB | 4 | 414.3 → 414.7 | +0.1% | 4.10 → 3.67 | 1,187 → 1,619 |
+| 50 × 100 KB | 8 | 648.1 → 670.9 | +3.5% | 3.62 → 3.59 | 2,540 → 2,755 |
+
+**Interpretation:** promising RAM benefit for POST 50 at two clients: all three
+after peaks are below all three before peaks, with similar throughput. It is
+**not a general capacity improvement**: at four clients RAM is unchanged but
+throughput falls **10.4%** and p95 rises **36.3%**; at eight clients RAM is
+higher. POST 500 never reaches the 10–15% RAM target. Its eight-client
+throughput median improves 41.5%, but timing ranges overlap and old slow tails
+remain unexplained; do not claim a consistent speedup. Single-client POST 50's
+32.5% RAM reduction comes with 16.2% lower throughput, so is not a free win.
+
+**Recommendation:** no broad production-optimization acceptance from this run.
+Keep checkpoint unchanged for user review. A longer matched-arrival-rate test
+with an explicit RAM/latency budget would be needed to justify the narrow
+two-client benefit. No such follow-up, application edit, revert, new commit,
+push or dashboard update was performed. Earlier incomplete run/pilots excluded.
+
+Fresh reports: `measurements/payload-concurrency/20261004T191648Z-4084cd1cf8ea/`.
+
+### 2026-10-04 — Final decision: POST payload lifetime — rejected and reverted
+
+**User decision: keep this experiment out of the retained optimizations.** Restore
+the application and related test assertions to `b08cd4e`; remove the helper,
+destructive reverse/pop loop, early model-release assertions and eager COPY-row
+materialization. Existing one-pass encoding, S3 session reuse, transactional COPY
+and GET changes remain. No database migration or configuration change.
+
+**Why:** whole-test memory savings were only 3.8% / 2.5%, with mixed latency.
+Concurrent testing found a real narrow benefit (POST 50, two clients, **13.2%
+lower server RSS** at similar throughput), but not a general capacity improvement.
+At four clients that workload saved no RAM, while throughput fell **10.4%** and
+p95 rose **36.3%**; at eight clients RAM increased. Accept giving up the narrow
+benefit in exchange for the simpler previous code and avoiding this mixed trade-off.
+
+**Verification after revert: 15/15 correctness/dashboard tests passed**, plus
+10/10 on the frozen before snapshot. Application and run-test files match the
+pre-experiment commit; Ruff checks/format and diff checks passed. Dedicated
+verification database and bucket removed; shared test resources untouched.
+
+**Kept:** checkpoint commit `7fe2538`, original benchmarks, CPU/Memray profiles,
+all concurrency trials/source snapshots and interpretations as **tested, rejected**
+history, not measurements of the restored code. No report deletion or dashboard
+point added. **User approved committing this revert and logbook on 2026-10-04**;
+no push was requested.
+Verification evidence:
+`measurements/payload-concurrency/20261004T193726Z-87bd3aa19092/`.
+
 ## Correctness test results
 
 Tests: [`tests/test_runs.py`](tests/test_runs.py). Executed: 2026-10-02.
@@ -806,7 +919,9 @@ POST latency is mixed; POST 50 is slower in all three after-suite medians, and i
 slow samples are retained. Do not claim a uniform latency or production RAM gain.
 The candidate is **checkpointed at the user's request for review**, not accepted
 as a selected optimization. No push or dashboard stage was added in this side
-experiment; reverting the implementation remains a separate decision.
+experiment at that point. **Later decision on 2026-10-04: user rejected it and
+requested a revert; application/tests restored to `b08cd4e`, 15/15 tests passed.**
+Keep these measurements as historical evidence of the rejected candidate.
 
 Reports and frozen source snapshots:
 `measurements/payload-lifetime-validation/20261004T073555Z-f8b6dbe95489/`.
