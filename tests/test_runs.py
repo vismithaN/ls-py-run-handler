@@ -26,6 +26,8 @@ async def assert_roundtrip(client, runs):
     """Create the batch, then compare every returned run with its input."""
     response = await client.post("/runs", json=runs)
     assert response.status_code == 201, response.text
+    assert response.headers["content-type"] == "application/json"
+    assert int(response.headers["content-length"]) == len(response.content)
     assert response.json()["status"] == "created"
     ids = response.json()["run_ids"]
     assert len(ids) == len(runs)
@@ -93,13 +95,18 @@ async def test_create_and_get_run():
     with (
         patch.dict(app.dependency_overrides, {get_s3_client: counted_s3_client}),
         patch.object(asyncpg.Connection, "copy_records_to_table", counted_copy),
+        patch.object(
+            Run,
+            "model_dump",
+            side_effect=AssertionError("POST must read existing Run fields directly"),
+        ),
     ):
         async with AsyncClient(app=app, base_url="http://test") as client:
             await assert_roundtrip(client, runs)
 
     assert get_counts == [0, 1, 1, 1]  # POST, then one S3 GET per run.
     assert decode_counts == [0, 3, 3, 3]  # Decode three fields from one S3 read.
-    assert conversion_counts == [1, 0, 0, 0]  # POST is unchanged; GET skips conversion.
+    assert conversion_counts == [0, 0, 0, 0]  # POST and GET skip conversion.
     assert copy_calls == [
         ("runs", ("id", "trace_id", "name", "inputs", "outputs", "metadata"))
     ]  # One database COPY for the entire POST batch.

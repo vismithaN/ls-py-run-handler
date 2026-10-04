@@ -80,7 +80,8 @@ async def create_runs(
             batch.write(b",")
         batch.write(b"{")
         field_refs = {}
-        for field_index, (key, value) in enumerate(run.model_dump().items()):
+        # Read existing field values instead of copying nested dictionaries/lists.
+        for field_index, (key, value) in enumerate(run):
             if field_index:
                 batch.write(b",")
             batch.write(orjson.dumps(key) + b":")
@@ -124,7 +125,11 @@ async def create_runs(
             columns=("id", "trace_id", "name", "inputs", "outputs", "metadata"),
         )
 
-    return {"status": "created", "run_ids": [str(run.id) for run in runs]}
+    # These values are already JSON-compatible; skip FastAPI's conversion walk.
+    return ORJSONResponse(
+        {"status": "created", "run_ids": [str(run.id) for run in runs]},
+        status_code=status.HTTP_201_CREATED,
+    )
 
 
 @router.get("/{run_id}", status_code=status.HTTP_200_OK, response_class=ORJSONResponse)

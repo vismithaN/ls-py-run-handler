@@ -224,6 +224,47 @@ no push was requested.
 Verification evidence:
 `measurements/payload-concurrency/20261004T193726Z-87bd3aa19092/`.
 
+### 2026-10-04 — Simple POST copying and response experiment
+
+**Retained as code cleanup, not counted as optimizations.** User decision on
+**2026-10-04**: keep both changes and their correctness tests. Start from restored
+`b2fe475`: (1) iterate
+existing Run fields instead of `model_dump()`; (2) add direct POST
+`ORJSONResponse`, explicitly preserving **201**. Standard validation, S3 batch
+format/offsets, COPY, GET and connection lifetimes remain unchanged. No migration.
+
+| Measurement | Baseline | Direct fields only | + Direct response |
+|---|---:|---:|---:|
+| POST 500 median latency, ms | 307.77 | 306.36 | 307.52 |
+| POST 50 median latency, ms | 300.68 | 297.88 | 300.51 |
+| POST 500 whole-test peak, MiB | 151.3847 | 151.3815 | 151.3789 |
+| POST 50 whole-test peak, MiB | 109.4864 | 109.4617 | 109.4617 |
+| POST 500 profiled request CPU, ms | 475.25 | 477.00 | 458.36 |
+| POST 50 profiled request CPU, ms | 400.31 | 394.99 | 388.71 |
+
+Three fresh suites/captures per version; rotated order. **15/15 correctness and
+dashboard tests passed per version**, 9 benchmark suites, 36 Memray recordings
+and 36 cold CPU captures. Dedicated resources cleaned; original make targets
+and benchmark settings unchanged. Both application changes remain uncommitted.
+
+**Interpretation:** combined median latency is effectively unchanged; memory
+savings are **under 0.03%**, not the 10–15% target. Profiled CPU medians fall
+3.56% / 2.90%, but ranges overlap and profiler overhead depends on call count.
+`model_dump` calls fall **500/50 → 0**, but replacement iteration costs
+11.34/1.15 ms versus 10.61/8.92 ms, so it is not a POST 500 CPU win. Direct response
+removes **505/55 recursive conversion calls**. It is reasonable as a simple
+processing cleanup, not a demonstrated latency/memory optimization. Keep the
+reports as validation history; do not count either change in the optimization
+summary or claim a latency/memory win in the submission. No dashboard point added.
+GET 10 KB median rose 3.71% despite
+unchanged GET code; do not hide that control result or attribute small movements
+without further evidence.
+
+Evidence and readable interpretation:
+`measurements/simple-post-validation/20261004T195729Z-8eb8a0864a0e/FINDINGS.md`.
+Full comparison, raw benchmark JSON, CPU/Memray recordings and all three frozen
+source snapshots preserved locally; reports/scripts are Git-ignored.
+
 ## Correctness test results
 
 Tests: [`tests/test_runs.py`](tests/test_runs.py). Executed: 2026-10-02.
