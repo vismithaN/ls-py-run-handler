@@ -61,7 +61,7 @@ async def create_runs(
     Create new runs in batch.
 
     Takes a JSON array of Run objects, uploads them to MinIO,
-    and stores references to certain fields in PostgreSQL.
+    and stores one reference to each complete run in PostgreSQL.
     """
     if not runs:
         raise HTTPException(status_code=400, detail="No runs provided")
@@ -77,22 +77,12 @@ async def create_runs(
     for index, run in enumerate(runs):
         if index:
             batch.write(b",")
-        batch.write(b"{")
-        field_refs = {}
-        for field_index, (key, value) in enumerate(run.model_dump().items()):
-            if field_index:
-                batch.write(b",")
-            batch.write(orjson.dumps(key) + b":")
-            start = batch.tell()
-            encoded = orjson.dumps(value)
-            batch.write(encoded)
-            if key in ("inputs", "outputs", "metadata"):
-                field_refs[key] = (
-                    f"s3://{settings.S3_BUCKET_NAME}/{object_key}"
-                    f"#{start}:{start + len(encoded)}/{key}"
-                )
-        batch.write(b"}")
-        run_refs.append(field_refs)
+        start = batch.tell()
+        batch.write(orjson.dumps(run.model_dump()))
+        run_refs.append(
+            f"s3://{settings.S3_BUCKET_NAME}/{object_key}"
+            f"#{start}:{batch.tell()}/run"
+        )
     batch.write(b"]")
     batch_data = batch.getvalue()
 
@@ -107,19 +97,17 @@ async def create_runs(
     # Store references in PG
     inserted_ids = []
 
-    for run, field_refs in zip(runs, run_refs, strict=True):
+    for run, run_ref in zip(runs, run_refs, strict=True):
         run_id = await db.fetchval(
             """
-            INSERT INTO runs (id, trace_id, name, inputs, outputs, metadata)
-            VALUES ($1, $2, $3, $4, $5, $6)
+            INSERT INTO runs (id, trace_id, name, run_ref)
+            VALUES ($1, $2, $3, $4)
             RETURNING id
             """,
             run.id,
             run.trace_id,
             run.name,
-            field_refs["inputs"],
-            field_refs["outputs"],
-            field_refs["metadata"],
+            run_ref,
         )
         inserted_ids.append(str(run_id))
 
@@ -138,7 +126,7 @@ async def get_run(
     # Fetch the run from the PG
     row = await db.fetchrow(
         """
-        SELECT id, trace_id, name, inputs, outputs, metadata
+        SELECT id, trace_id, name, run_ref, inputs, outputs, metadata
         FROM runs
         WHERE id = $1
         """,
@@ -169,6 +157,8 @@ async def get_run(
         return bucket, key, None, None
 
     async def fetch_range(bucket, key, start, end):
+        if start < 0 or end <= start:
+            raise ValueError("Invalid S3 byte range")
         response = await s3.get_object(
             Bucket=bucket, Key=key, Range=f"bytes={start}-{end - 1}"
         )
@@ -186,12 +176,29 @@ async def get_run(
 
     fields = ("inputs", "outputs", "metadata")
     try:
+        if run_data["run_ref"]:
+            bucket, key, offsets, _ = parse_s3_ref(run_data["run_ref"])
+            if not bucket or not key or not offsets:
+                raise ValueError("Invalid run reference")
+            # The range includes the run's opening and closing braces.
+            stored_run = orjson.loads(await fetch_range(bucket, key, *offsets))
+            if (
+                not isinstance(stored_run, dict)
+                or set(stored_run) != set(Run.model_fields)
+                or stored_run["id"] != str(run_data["id"])
+                or stored_run["trace_id"] != str(run_data["trace_id"])
+                or stored_run["name"] != run_data["name"]
+                or not all(isinstance(stored_run[field], dict) for field in fields)
+            ):
+                raise ValueError("S3 range does not contain the expected run")
+            return stored_run
+
+        # Rows written before the migration still have field-level references.
         refs = [parse_s3_ref(run_data[field]) for field in fields]
         if (
             all(bucket and key and offsets for bucket, key, offsets, _ in refs)
             and len({(bucket, key) for bucket, key, _, _ in refs}) == 1
         ):
-            # One range covers the three fields without fetching the full batch.
             bucket, key = refs[0][:2]
             start = min(offsets[0] for _, _, offsets, _ in refs)
             end = max(offsets[1] for _, _, offsets, _ in refs)
@@ -201,7 +208,6 @@ async def get_run(
                 for _, _, offsets, _ in refs
             ]
         else:
-            # Older references may point to different S3 objects.
             values = await asyncio.gather(*(fetch_field(ref) for ref in refs))
     except Exception as e:
         raise HTTPException(

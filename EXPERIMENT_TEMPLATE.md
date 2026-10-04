@@ -73,6 +73,42 @@ The correctness fix is separate from performance optimizations.
 | S3 session experiment | Reuse the aiobotocore session, but still create and close an S3 client for each request. This isolates SDK setup from connection pooling and keeps the original benchmark loop behavior testable. | **13/13 tests passed** (10 run tests and 3 dashboard tests); **4/4 original benchmarks**, **4/4 original Memray profiles**, **12/12 cold CPU captures**, and **12/12 diagnostics** passed. Diagnostic requests: **60/60 correct**; S3 request and connection counts unchanged. One original benchmark report per stage so far. |
 | S3 session A/B repeat | Re-ran the original `make benchmark` suite three times with reuse on and three times off, in the order on–off–off–on–on–off. Each run reset the dedicated test database and bucket. The off version matched `8f5b534` in both application call sites; the on version matched `a765570`. The optimized application code was restored afterward. | **24/24 benchmark cases passed.** GET medians were consistently lower with reuse; POST was noisier. Raw reports are preserved in `measurements/session-reuse-validation/benchmark-reports/` (ignored by Git, outside the dashboard's stage series). |
 | One S3 range per GET | Read the byte span covering all three saved fields from one object, then decode each field using its existing offsets. Keep the per-field path for references to different objects; leave POST and S3 client lifetime unchanged. | **15/15 tests** (10 run, 5 dashboard), **12/12 benchmark cases**, **4/4 original Memray profiles**, **12/12 cold CPU captures** and **60/60 diagnostic requests** passed. GET S3 requests and new connections: **3 → 1 per request**. Benchmark latency changed little; see below. Uncommitted pending review. |
+| Complete-run S3 reference | Replace field slicing for new rows with one `run_ref` covering the full run JSON, including its braces. POST serializes each run once; GET performs one range request and one JSON decode. Migration `81b1d309a02a` adds a nullable reference column; old rows retain their previous read path. | **15/15 tests** (10 run, 5 dashboard) and **4/4 original benchmark scenarios** passed in isolated resources. Verified migration of an existing row, safe downgrade/re-upgrade, refusal of a downgrade that would lose new references, and errors for truncated/invalid/wrong-run data. No CPU or memory profile collected for this replacement. |
+
+Complete-run references have the form `s3://bucket/object#start:end/run`, with an
+exclusive end offset. New rows store `id`, `trace_id`, `name`, and `run_ref`;
+the legacy field-reference columns remain null. Apply `make db-migrate` before
+using the updated application against the development database. Validation used
+temporary databases/buckets and removed only those resources afterward.
+
+### Production rollout requirements — pending implementation
+
+The production assumption requires a staged rollout. The current reader supports
+both reference formats, but POST writes only `run_ref`. Old application instances
+cannot read those new rows because their field-reference columns are null. Do not
+use this write behavior in a mixed-version production rollout without the
+compatibility steps below.
+
+| Phase | Required behavior | Gate before continuing |
+|---|---|---|
+| Add the column | Add nullable `run_ref`; retain legacy columns. Use a short lock timeout and retry if PostgreSQL cannot acquire the schema-change lock. | Migration succeeds without prolonged blocking. |
+| Deploy compatibility code | Temporarily write both whole-run and field references from the same S3 bytes. Keep readers for both formats; add a switch to disable whole-run reads during rollout. | Old readers retrieve new writes correctly; new readers retrieve old writes correctly. |
+| Enable whole-run reads | Enable the new read path gradually while retaining both references. | Correct responses, acceptable latency/error rates, and one S3 request per new-format GET. |
+| Backfill old rows | Process S3 batches once each, locate exact run byte boundaries, verify contents/identity, and update only missing `run_ref` values in small, resumable batches. Preserve legacy references. | Backfill progress and failures are visible; every promoted reference reads the expected run. |
+| End dual writing | Stop writing field references only after every instance supports `run_ref` and the rollback window has ended. | Rollbacks now target a version that understands `run_ref`; rollback to the original reader is no longer safe for new rows. |
+| Later cleanup | Remove legacy columns/fallback in a separate migration after all required rows have valid whole-run references. | No remaining reader, writer, or rollback version depends on legacy columns. |
+
+Production acceptance tests must cover both cross-version read/write combinations,
+rollback after new runs have been written, and interrupted/restarted backfill.
+Temporary dual writing, rollout switches, and the backfill job are **not yet
+implemented**. The experiment measures the final whole-run path; its benchmark
+does not establish that a mixed-version deployment is safe.
+
+One validation benchmark report is saved at
+`measurements/run-range-validation-37e38105787c/benchmarks/Darwin-CPython-3.11-64bit/0001_run-range.json`.
+Its medians are POST 500 **585.2 ms**, POST 50 **343.2 ms**, GET 10 KB **42.7 ms**,
+and GET 100 KB **49.4 ms**. This single report verifies the workloads run; it does
+not establish an additional latency or memory improvement.
 
 Session A/B report medians, in milliseconds. Each cell lists three independent
 suite results; the percentage compares the median of those three values. These
