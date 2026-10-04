@@ -201,8 +201,10 @@ def test_get_optimization_interpretations(tmp_path, monkeypatch):
         assert workload["functions"][5]["calls"] == 1
 
     spooled = snapshot["stages"][-1]
-    assert spooled["title"] == "Spooled POST buffer (trade-off)"
-    assert spooled["review_status"].startswith("Uncommitted")
+    assert spooled["title"] == "Spooled POST buffer (not retained)"
+    assert spooled["review_status"].startswith("Not retained")
+    assert spooled["findings"][0]["status"] == "Not retained"
+    assert spooled["commit"].startswith("0def488")
     assert spooled["findings"][1]["status"] == "Trade-off"
     for workload, writes in zip(
         spooled["cpu"]["workloads"][:2], (502, 52), strict=True

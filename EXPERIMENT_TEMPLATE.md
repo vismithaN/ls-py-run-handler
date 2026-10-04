@@ -620,7 +620,7 @@ download bodies consumed by the application; they exclude headers/TCP framing.
 | **Reuse S3 SDK session, not client** | S3 client-setup CPU, original POST/GET latency and Memray peak; correctness across benchmark event loops | Shared session may cache SDK setup work. S3 clients still open/close per request, so S3 request and connection counts are not expected to fall. Memory improvement is uncertain. | First report: GET 10 KB median **89.8 → 41.1 ms**; GET 100 KB **99.9 → 48.1 ms**. POST 500 **594.8 → 566.7 ms**; POST 50 **394.4 → 322.9 ms**. Cold profiled `get_s3_client` CPU, session 1, POST 500: **0.1666 → 0.0323 s inclusive**. Diagnostic S3 requests/connections per request: POST **1 → 1**, GET **3 → 3**. See per-workload table and limitations below. |
 | **Bulk database writes** | POST latency, ingestion throughput and database command count | Fewer database commands and faster batch ingestion | Not measured |
 | **One S3 read per run** | GET latency, S3 request count and downloaded bytes | Fewer S3 requests; faster retrieval was a hypothesis; measure the byte-transfer tradeoff | **3 → 1 S3 requests and new connections per GET**, with +23 downloaded bytes. GET 10 KB median of three reports: **41.1 → 39.3 ms**; GET 100 KB: **47.5 → 47.1 ms**. Timing ranges overlap; latency improvement is not established. |
-| **Spooled POST upload — candidate** | Original POST/GET latency, cold Yappi CPU and original Memray whole-test peak | Reduce the outgoing batch held in RAM; disk/file-body overhead may increase latency | POST 500: **151.4 → 143.6 MiB (−5.1%)**, median **324.6 → 362.4 ms (+11.7%)**. POST 50: **111.5 → 105.6 MiB (−5.3%)**, median **322.7 → 350.5 ms (+8.6%)**. GET latency and memory essentially unchanged. Memory hypothesis supported, but not a free improvement. |
+| **Spooled POST upload — not retained** | Original POST/GET latency, cold Yappi CPU and original Memray whole-test peak | Reduce the outgoing batch held in RAM; disk/file-body overhead may increase latency | POST 500: **151.4 → 143.6 MiB (−5.1%)**, median **324.6 → 362.4 ms (+11.7%)**. POST 50: **111.5 → 105.6 MiB (−5.3%)**, median **322.7 → 350.5 ms (+8.6%)**. GET latency and memory essentially unchanged. **Rejected:** the modest memory saving did not justify the POST 500 latency cost. |
 
 The rows highlight each optimization's main measurements. Use the three active
 workflows (`make benchmark`, `make memprofile`, cold `make measure --passes cpu`)
@@ -709,9 +709,12 @@ Results and exact source snapshots:
 Dashboard interpretation: `reports/interpretations/spooled-post-buffer.json`.
 The benchmark graph adds the first completed final after report; the interpretation
 uses all three reports per version. Memory is whole-test tracked allocation,
-not RSS. The remaining peak is request parsing. **Decision: awaiting review;
-do not accept a ~5% memory saving without acknowledging slower POSTs and disk use.**
-No commit or push made for this experiment.
+not RSS. The experimental peak shifted to request parsing. **Decision: not retained;
+the ~5% memory saving did not justify the POST 500 slowdown and disk dependence.**
+Saved the tested implementation in commit `0def488`, then restored the previous
+in-memory POST upload and its tests in a separate revert commit. Reports and
+interpretation remain as rejected-experiment history, not measurements of the
+restored code. No push made.
 
 ## Final graphs and explanation
 

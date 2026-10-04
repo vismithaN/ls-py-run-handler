@@ -2,10 +2,10 @@
   "schema_version": 1,
   "id": "spooled-post-buffer",
   "order": 7,
-  "title": "Spooled POST buffer (trade-off)",
-  "commit": "8eef76af92ad86990fb1ba6436e3aefb606a8e04",
+  "title": "Spooled POST buffer (not retained)",
+  "commit": "0def488f7d5abd21df507b77821243cfd8b2fc85",
   "application_sha256": "ff3dd98268611eec11ca3a19466528e4a77873789b93fced38bbf73313e42d72",
-  "review_status": "Uncommitted memory experiment \u00b7 latency cost; awaiting decision",
+  "review_status": "Not retained · memory saving did not justify the POST 500 latency cost; implementation reverted",
   "summary": "POST 500 \u00d7 10 KB: 151.4 \u2192 143.6 MiB (5.1% lower); POST 50 \u00d7 100 KB: 111.5 \u2192 105.6 MiB (5.3% lower). POST 500 \u00d7 10 KB: 324.6 \u2192 362.4 ms (11.7% slower); POST 50 \u00d7 100 KB: 322.7 \u2192 350.5 ms (8.6% slower).",
   "cpu": {
     "profiler": "Yappi 1.7.6 \u00b7 CPU clock \u00b7 built-ins enabled",
@@ -381,11 +381,11 @@
     {
       "title": "POST memory hypothesis",
       "evidence": "POST 500 \u00d7 10 KB: 151.4 \u2192 143.6 MiB (5.1% lower); POST 50 \u00d7 100 KB: 111.5 \u2192 105.6 MiB (5.3% lower)",
-      "interpretation": "Supported: large outgoing batches spill to disk. Whole-test peaks now occur during request parsing, so the saving is smaller than the ~16.5 MiB upload payload.",
+      "interpretation": "Memory hypothesis supported, but rejected overall: ~5% lower whole-test peak did not justify 11.7% slower POST 500. The in-memory upload implementation is restored; these numbers describe the archived experiment, not current code.",
       "optimization": "1 MiB spooled batch; one in-memory run at a time; direct seekable S3 upload",
       "validation": "Three original Memray captures per workload/version; all raw recordings preserved.",
       "evidence_type": "Original whole-test Memray",
-      "status": "Improved"
+      "status": "Not retained"
     },
     {
       "title": "POST latency trade-off",
@@ -576,7 +576,7 @@
     "POST 50 has a worse median but a slightly lower mean and overlapping suite ranges. The data does not establish a uniform POST 50 latency regression or improvement.",
     "Original benchmarks regenerate random ASCII strings and UUIDs with the same structure and byte lengths; they are not byte-identical across suites. Cold CPU fixtures are fixed and matched before/after.",
     "Failed-upload file cleanup is tested; cleanup of an S3 object after later DB failure remains an existing cross-store limitation.",
-    "No commit or push was made. The Git revision identifies the base checkout; application SHA and archived source snapshots identify the exact measured candidate."
+    "The experiment implementation is preserved in commit 0def488 and reverted in a follow-up commit. Application SHA and source snapshots identify the measured experimental code; these measurements do not describe the restored current implementation. No push was made."
   ],
   "metric_sources": [
     {

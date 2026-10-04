@@ -1,7 +1,6 @@
 import asyncio
 import io
 import uuid
-from tempfile import SpooledTemporaryFile
 from typing import Any, Dict, List, Optional
 
 import asyncpg
@@ -73,45 +72,38 @@ async def create_runs(
 
     object_key = f"batches/{batch_id}.json"
 
+    batch = io.BytesIO()
+    batch.write(b"[")
     run_refs = []
-    # Keep small batches in RAM; spill larger uploads to a temporary file.
-    with SpooledTemporaryFile(max_size=1024 * 1024, mode="w+b") as batch:
-        batch.write(b"[")
-        for index, run in enumerate(runs):
-            # Assemble one run in RAM, avoiding thousands of small file writes.
-            run_buffer = io.BytesIO()
-            base_offset = batch.tell()
-            if index:
-                run_buffer.write(b",")
-            run_buffer.write(b"{")
-            field_refs = {}
-            for field_index, (key, value) in enumerate(run.model_dump().items()):
-                if field_index:
-                    run_buffer.write(b",")
-                run_buffer.write(orjson.dumps(key) + b":")
-                start = base_offset + run_buffer.tell()
-                encoded = orjson.dumps(value)
-                run_buffer.write(encoded)
-                if key in ("inputs", "outputs", "metadata"):
-                    field_refs[key] = (
-                        f"s3://{settings.S3_BUCKET_NAME}/{object_key}"
-                        f"#{start}:{start + len(encoded)}/{key}"
-                    )
-            run_buffer.write(b"}")
-            batch.write(run_buffer.getvalue())
-            run_buffer.close()
-            run_refs.append(field_refs)
-        batch.write(b"]")
-        size = batch.tell()
-        batch.seek(0)
+    for index, run in enumerate(runs):
+        if index:
+            batch.write(b",")
+        batch.write(b"{")
+        field_refs = {}
+        for field_index, (key, value) in enumerate(run.model_dump().items()):
+            if field_index:
+                batch.write(b",")
+            batch.write(orjson.dumps(key) + b":")
+            start = batch.tell()
+            encoded = orjson.dumps(value)
+            batch.write(encoded)
+            if key in ("inputs", "outputs", "metadata"):
+                field_refs[key] = (
+                    f"s3://{settings.S3_BUCKET_NAME}/{object_key}"
+                    f"#{start}:{start + len(encoded)}/{key}"
+                )
+        batch.write(b"}")
+        run_refs.append(field_refs)
+    batch.write(b"]")
+    batch_data = batch.getvalue()
 
-        await s3.put_object(
-            Bucket=settings.S3_BUCKET_NAME,
-            Key=object_key,
-            Body=batch,
-            ContentLength=size,
-            ContentType="application/json",
-        )
+    # Upload the batch data
+    await s3.put_object(
+        Bucket=settings.S3_BUCKET_NAME,
+        Key=object_key,
+        Body=batch_data,
+        ContentType="application/json",
+    )
 
     # Send all references together; a failed batch must not leave partial rows.
     records = (
