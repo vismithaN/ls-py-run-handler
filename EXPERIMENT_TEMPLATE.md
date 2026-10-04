@@ -226,12 +226,21 @@ Verification evidence:
 
 ### 2026-10-04 — Simple POST copying and response experiment
 
-**Retained as code cleanup, not counted as optimizations.** User decision on
-**2026-10-04**: keep both changes and their correctness tests. Start from restored
-`b2fe475`: (1) iterate
-existing Run fields instead of `model_dump()`; (2) add direct POST
+**Final decision — 2026-10-04: keep the direct response as code cleanup; revert
+raw field iteration. Neither is counted as an optimization.** Checkpoint both
+tested changes in `2e0ddc4`, then restore `run.model_dump().items()` and remove
+the test guard that forbids it. Keep the direct-response and JSON-header checks.
+This preserves standard Pydantic serialization behavior rather than bypassing
+it for negligible memory savings and mixed CPU results.
+
+The experiment started from restored `b2fe475`: (1) iterate existing Run fields
+instead of `model_dump()`; (2) add direct POST
 `ORJSONResponse`, explicitly preserving **201**. Standard validation, S3 batch
 format/offsets, COPY, GET and connection lifetimes remain unchanged. No migration.
+
+**The table below measures the historical three-stage experiment, not the final
+response-only revision.** Preserve all reports; do not attribute these combined
+CPU percentages to the final retained change.
 
 | Measurement | Baseline | Direct fields only | + Direct response |
 |---|---:|---:|---:|
@@ -245,7 +254,8 @@ format/offsets, COPY, GET and connection lifetimes remain unchanged. No migratio
 Three fresh suites/captures per version; rotated order. **15/15 correctness and
 dashboard tests passed per version**, 9 benchmark suites, 36 Memray recordings
 and 36 cold CPU captures. Dedicated resources cleaned; original make targets
-and benchmark settings unchanged. Both application changes remain uncommitted.
+and benchmark settings unchanged. The checkpoint preserves both tested changes;
+the follow-up commit restores `model_dump()` and retains only direct response.
 
 **Interpretation:** combined median latency is effectively unchanged; memory
 savings are **under 0.03%**, not the 10–15% target. Profiled CPU medians fall
@@ -253,8 +263,9 @@ savings are **under 0.03%**, not the 10–15% target. Profiled CPU medians fall
 `model_dump` calls fall **500/50 → 0**, but replacement iteration costs
 11.34/1.15 ms versus 10.61/8.92 ms, so it is not a POST 500 CPU win. Direct response
 removes **505/55 recursive conversion calls**. It is reasonable as a simple
-processing cleanup, not a demonstrated latency/memory optimization. Keep the
-reports as validation history; do not count either change in the optimization
+processing cleanup, not a demonstrated latency/memory optimization. The earlier
+decision to keep both is superseded by the user's approval of this recommendation.
+Keep the reports as validation history; do not count either change in the optimization
 summary or claim a latency/memory win in the submission. No dashboard point added.
 GET 10 KB median rose 3.71% despite
 unchanged GET code; do not hide that control result or attribute small movements
@@ -264,6 +275,12 @@ Evidence and readable interpretation:
 `measurements/simple-post-validation/20261004T195729Z-8eb8a0864a0e/FINDINGS.md`.
 Full comparison, raw benchmark JSON, CPU/Memray recordings and all three frozen
 source snapshots preserved locally; reports/scripts are Git-ignored.
+
+**Final response-only verification: 15/15 correctness/dashboard tests passed.**
+Ruff/format and diff checks passed; dedicated verification database/bucket
+removed, shared test resources untouched. No new benchmark or profiler result
+is claimed for this final revision. Verification evidence:
+`measurements/simple-post-validation/retention-check-20261004T202736Z-81a658cbac88/`.
 
 ## Correctness test results
 

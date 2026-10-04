@@ -95,11 +95,6 @@ async def test_create_and_get_run():
     with (
         patch.dict(app.dependency_overrides, {get_s3_client: counted_s3_client}),
         patch.object(asyncpg.Connection, "copy_records_to_table", counted_copy),
-        patch.object(
-            Run,
-            "model_dump",
-            side_effect=AssertionError("POST must read existing Run fields directly"),
-        ),
     ):
         async with AsyncClient(app=app, base_url="http://test") as client:
             await assert_roundtrip(client, runs)

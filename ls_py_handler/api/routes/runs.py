@@ -80,8 +80,7 @@ async def create_runs(
             batch.write(b",")
         batch.write(b"{")
         field_refs = {}
-        # Read existing field values instead of copying nested dictionaries/lists.
-        for field_index, (key, value) in enumerate(run):
+        for field_index, (key, value) in enumerate(run.model_dump().items()):
             if field_index:
                 batch.write(b",")
             batch.write(orjson.dumps(key) + b":")
