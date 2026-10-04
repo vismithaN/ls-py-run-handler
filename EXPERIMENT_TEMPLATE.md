@@ -779,6 +779,42 @@ application fingerprint matches the fresh before version. Temporary verification
 database/bucket were removed; shared test resources and all raw reports were
 preserved. No new benchmark/profile point or push was made for the revert.
 
+### 2026-10-04 — POST payload lifetime experiment checkpoint
+
+Hypothesis: release each validated Run after encoding it, retaining only compact
+COPY rows and response IDs, to reduce overlap with the growing S3 batch.
+Compare against retained `b08cd4e` code, **not** the rejected direct-JSON parser.
+
+| Measurement | POST 500 × 10 KB | POST 50 × 100 KB |
+|---|---|---|
+| Whole-test Memray peak | **151.4 → 145.6 MiB (−3.8%)** | **112.4 → 109.6 MiB (−2.5%)** |
+| Original benchmark median | **366.0 → 336.8 ms (−8.0%)** | **337.8 → 364.4 ms (+7.9%)** |
+| Pooled benchmark mean | **364.5 → 355.5 ms (−2.5%)** | **343.0 → 440.7 ms (+28.5%)** |
+| Cold first-request CPU | **0.4811 → 0.4814 s (+0.1%)** | **0.4129 → 0.4008 s (−2.9%)** |
+
+Original four workloads/settings; three unprofiled benchmark suites and three
+pytest-memray suites per version in **B–A–A–B–B–A** order; three cold Yappi
+captures per workload/version. **15/15 correctness/dashboard tests passed**, with
+weak-reference assertions proving earlier model release; ten run test functions
+remain. **24 benchmark cases, 24 original memory recordings and 24 cold CPU
+captures** completed. Serialization remains 6,000/600 POST calls and one COPY.
+GET implementation, validation, S3 bytes/offsets and database schema unchanged.
+
+**The 10–15% memory target was not met.** Cached decoded request data, HTTP body
+and outgoing batch remain; allocator-stack groups are not exact live-object sizes.
+POST latency is mixed; POST 50 is slower in all three after-suite medians, and its
+slow samples are retained. Do not claim a uniform latency or production RAM gain.
+The candidate is **checkpointed at the user's request for review**, not accepted
+as a selected optimization. No push or dashboard stage was added in this side
+experiment; reverting the implementation remains a separate decision.
+
+Reports and frozen source snapshots:
+`measurements/payload-lifetime-validation/20261004T073555Z-f8b6dbe95489/`.
+Final test-wrapper recheck:
+`measurements/payload-lifetime-validation/20261004T074639Z-29976d1a9b28/`.
+All experiment/CPU databases and buckets were isolated and removed; shared test
+resources were not reset. Raw memory and CPU reports remain under `profiles/`.
+
 ## Final graphs and explanation
 
 Use the original pytest-benchmark results for primary latency/throughput graphs

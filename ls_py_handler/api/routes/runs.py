@@ -52,6 +52,28 @@ async def get_s3_client():
         yield client
 
 
+def append_run_to_batch(batch: io.BytesIO, run: Run, object_key: str, first: bool):
+    """Append one run using the existing format; keep field temporaries local."""
+    if not first:
+        batch.write(b",")
+    batch.write(b"{")
+    field_refs = {}
+    for field_index, (key, value) in enumerate(run.model_dump().items()):
+        if field_index:
+            batch.write(b",")
+        batch.write(orjson.dumps(key) + b":")
+        start = batch.tell()
+        encoded = orjson.dumps(value)
+        batch.write(encoded)
+        if key in ("inputs", "outputs", "metadata"):
+            field_refs[key] = (
+                f"s3://{settings.S3_BUCKET_NAME}/{object_key}"
+                f"#{start}:{start + len(encoded)}/{key}"
+            )
+    batch.write(b"}")
+    return field_refs
+
+
 @router.post("", status_code=status.HTTP_201_CREATED)
 async def create_runs(
     runs: List[Run],
@@ -74,26 +96,25 @@ async def create_runs(
 
     batch = io.BytesIO()
     batch.write(b"[")
-    run_refs = []
-    for index, run in enumerate(runs):
-        if index:
-            batch.write(b",")
-        batch.write(b"{")
-        field_refs = {}
-        for field_index, (key, value) in enumerate(run.model_dump().items()):
-            if field_index:
-                batch.write(b",")
-            batch.write(orjson.dumps(key) + b":")
-            start = batch.tell()
-            encoded = orjson.dumps(value)
-            batch.write(encoded)
-            if key in ("inputs", "outputs", "metadata"):
-                field_refs[key] = (
-                    f"s3://{settings.S3_BUCKET_NAME}/{object_key}"
-                    f"#{start}:{start + len(encoded)}/{key}"
-                )
-        batch.write(b"}")
-        run_refs.append(field_refs)
+    records = []
+    run_ids = []
+    # Consume the request-owned list, not a copy that retains all the models.
+    runs.reverse()
+    while runs:
+        run = runs.pop()
+        field_refs = append_run_to_batch(batch, run, object_key, first=not records)
+        records.append(
+            (
+                run.id,
+                run.trace_id,
+                run.name,
+                field_refs["inputs"],
+                field_refs["outputs"],
+                field_refs["metadata"],
+            )
+        )
+        run_ids.append(str(run.id))
+        del run
     batch.write(b"]")
     batch_data = batch.getvalue()
 
@@ -106,17 +127,6 @@ async def create_runs(
     )
 
     # Send all references together; a failed batch must not leave partial rows.
-    records = (
-        (
-            run.id,
-            run.trace_id,
-            run.name,
-            field_refs["inputs"],
-            field_refs["outputs"],
-            field_refs["metadata"],
-        )
-        for run, field_refs in zip(runs, run_refs, strict=True)
-    )
     async with db.transaction():
         await db.copy_records_to_table(
             "runs",
@@ -124,7 +134,7 @@ async def create_runs(
             columns=("id", "trace_id", "name", "inputs", "outputs", "metadata"),
         )
 
-    return {"status": "created", "run_ids": [str(run.id) for run in runs]}
+    return {"status": "created", "run_ids": run_ids}
 
 
 @router.get("/{run_id}", status_code=status.HTTP_200_OK, response_class=ORJSONResponse)

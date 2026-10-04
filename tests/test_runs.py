@@ -1,5 +1,6 @@
 import asyncio
 import uuid
+import weakref
 from unittest.mock import patch
 
 import asyncpg
@@ -70,7 +71,15 @@ async def test_create_and_get_run():
     decode_counts = []
     conversion_counts = []
     copy_calls = []
+    serialized_models = []
     original_copy = asyncpg.Connection.copy_records_to_table
+    original_dump = Run.model_dump
+
+    def tracked_dump(run, *args, **kwargs):
+        if serialized_models:
+            assert serialized_models[-1]() is None  # Previous run is released.
+        serialized_models.append(weakref.ref(run))
+        return original_dump(run, *args, **kwargs)
 
     async def counted_copy(db, table, **kwargs):
         copy_calls.append((table, kwargs["columns"]))
@@ -78,7 +87,15 @@ async def test_create_and_get_run():
 
     async def counted_s3_client():
         async for s3 in get_s3_client():
+            original_put = s3.put_object
+
+            async def checked_put(_put=original_put, **kwargs):
+                assert len(serialized_models) == len(runs)
+                assert all(reference() is None for reference in serialized_models)
+                return await _put(**kwargs)
+
             with (
+                patch.object(s3, "put_object", new=checked_put),
                 patch.object(s3, "get_object", wraps=s3.get_object) as get_object,
                 patch.object(orjson, "loads", wraps=orjson.loads) as loads,
                 patch(
@@ -93,6 +110,7 @@ async def test_create_and_get_run():
     with (
         patch.dict(app.dependency_overrides, {get_s3_client: counted_s3_client}),
         patch.object(asyncpg.Connection, "copy_records_to_table", counted_copy),
+        patch.object(Run, "model_dump", new=tracked_dump),
     ):
         async with AsyncClient(app=app, base_url="http://test") as client:
             await assert_roundtrip(client, runs)
