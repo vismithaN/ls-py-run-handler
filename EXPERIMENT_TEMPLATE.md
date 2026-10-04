@@ -711,10 +711,14 @@ The benchmark graph adds the first completed final after report; the interpretat
 uses all three reports per version. Memory is whole-test tracked allocation,
 not RSS. The experimental peak shifted to request parsing. **Decision: not retained;
 the ~5% memory saving did not justify the POST 500 slowdown and disk dependence.**
-Saved the tested implementation in commit `0def488`, then restored the previous
-in-memory POST upload and its tests in a separate revert commit. Reports and
-interpretation remain as rejected-experiment history, not measurements of the
-restored code. No push made.
+**Completed and reverted:** saved the tested implementation in `0def488`, then
+reverted the spooled-upload code and its related tests in `eb08946`, restoring
+the previous in-memory POST upload. The ~5% memory reduction was not worth the
+consistent 11.7% POST 500 latency increase and added disk dependence.
+**Kept:** benchmark, CPU and memory reports, source snapshots, and dashboard
+interpretation, labelled **not retained**. These are historical experiment
+results, not measurements of the restored code. **Validation after revert:
+15/15 tests passed.** No push made.
 
 ## Final graphs and explanation
 

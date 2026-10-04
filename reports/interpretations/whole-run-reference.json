@@ -194,7 +194,7 @@
   "memory": {
     "profiler": "Memray 1.17.2 via the original pytest-memray workflow",
     "scope": "Peak tracked allocation for the entire benchmark test function, including fixture generation, repeated execution and GET seeding. Not server-only RSS.",
-    "reading_guide": "Peak MiB = sum of high-watermark allocation records / 1,048,576. The S3 group includes records with botocore or aiobotocore in their Python stack; other records are unclassified.",
+    "reading_guide": "Groups follow recorded Python allocation stacks, not exact object ownership. MiB = bytes / 1,048,576. Top five groups plus the remainder sum to the original peak; smaller groups can be expanded. Missing stacks stay unattributed. All groups are saved in the interpretation download.",
     "limitation": "One capture per workload/stage. Whole-test peaks are not server RSS, per-request RAM, or proof of a repeatable saving.",
     "workloads": [
       {
@@ -204,12 +204,48 @@
         "source_id": "memory-post-500-10kb",
         "allocations": [
           {
+            "label": "Benchmark-generated test data",
+            "mib": 37.680498123168945
+          },
+          {
+            "label": "Unattributed (no Python stack)",
+            "mib": 32.041733741760254
+          },
+          {
+            "label": "Decoded request JSON",
+            "mib": 23.67315673828125
+          },
+          {
+            "label": "Batch buffer",
+            "mib": 16.49812126159668
+          },
+          {
+            "label": "HTTP request body",
+            "mib": 16.477140426635742
+          },
+          {
             "label": "S3 SDK / data",
             "mib": 14.195133209228516
           },
           {
-            "label": "Other tracked allocations (not classified)",
-            "mib": 137.1790428161621
+            "label": "Model validation",
+            "mib": 10.673004150390625
+          },
+          {
+            "label": "Other framework / client / runtime",
+            "mib": 0.12641620635986328
+          },
+          {
+            "label": "POST references / bookkeeping",
+            "mib": 0.007846832275390625
+          },
+          {
+            "label": "Benchmark request serialization / bookkeeping",
+            "mib": 0.0006160736083984375
+          },
+          {
+            "label": "HTTP response encoding",
+            "mib": 0.0005092620849609375
           }
         ]
       },
@@ -220,12 +256,36 @@
         "source_id": "memory-post-50-100kb",
         "allocations": [
           {
+            "label": "Unattributed (no Python stack)",
+            "mib": 32.01673984527588
+          },
+          {
+            "label": "Decoded request JSON",
+            "mib": 26.714752197265625
+          },
+          {
+            "label": "Encoded run JSON",
+            "mib": 19.118353843688965
+          },
+          {
+            "label": "HTTP request body",
+            "mib": 16.547521591186523
+          },
+          {
+            "label": "Benchmark-generated test data",
+            "mib": 12.714752197265625
+          },
+          {
+            "label": "Model validation",
+            "mib": 3.714752197265625
+          },
+          {
             "label": "S3 SDK / data",
             "mib": 1.032379150390625
           },
           {
-            "label": "Other tracked allocations (not classified)",
-            "mib": 110.84489059448242
+            "label": "Other framework / client / runtime",
+            "mib": 0.018018722534179688
           }
         ]
       },
@@ -236,12 +296,24 @@
         "source_id": "memory-get-10kb",
         "allocations": [
           {
+            "label": "Decode retrieved field JSON",
+            "mib": 8.0
+          },
+          {
             "label": "S3 SDK / data",
             "mib": 0.8534669876098633
           },
           {
-            "label": "Other tracked allocations (not classified)",
-            "mib": 8.372032165527344
+            "label": "Other framework / client / runtime",
+            "mib": 0.28309154510498047
+          },
+          {
+            "label": "Unattributed (no Python stack)",
+            "mib": 0.07960224151611328
+          },
+          {
+            "label": "Benchmark-generated test data",
+            "mib": 0.00933837890625
           }
         ]
       },
@@ -256,12 +328,46 @@
             "mib": 0.7738409042358398
           },
           {
-            "label": "Other tracked allocations (not classified)",
-            "mib": 1.6714496612548828
+            "label": "Unattributed (no Python stack)",
+            "mib": 0.5171022415161133
+          },
+          {
+            "label": "Encoded run JSON",
+            "mib": 0.331024169921875
+          },
+          {
+            "label": "HTTP request body",
+            "mib": 0.3309822082519531
+          },
+          {
+            "label": "Other framework / client / runtime",
+            "mib": 0.2694559097290039
+          },
+          {
+            "label": "Benchmark-generated test data",
+            "mib": 0.0742950439453125
+          },
+          {
+            "label": "Decoded request JSON",
+            "mib": 0.0742950439453125
+          },
+          {
+            "label": "Model validation",
+            "mib": 0.0742950439453125
           }
         ]
       }
-    ]
+    ],
+    "grouping": {
+      "version": "python-stack-v1",
+      "rules_file": "scripts/memory_groups.py",
+      "rules_sha256": "c3dd29979cc36f5342381a4d36bfdd29321a1d8a2c7b2e83d35a81d8fabacedd",
+      "route_source": {
+        "git_revision": "87d8666007ae957497ae781b96e0eca30e71bfed",
+        "path": "ls_py_handler/api/routes/runs.py",
+        "sha256": "14f3663fb94953b8254aa1b1dbbaf5c19bbd581afa190e92d03a68a9deef24e3"
+      }
+    }
   },
   "finding_mode": "results",
   "findings": [
@@ -426,7 +532,7 @@
         "memory-get-10kb",
         "memory-get-100kb"
       ],
-      "rule": "Original Memray high-watermark sizes / 2^20; S3 group has botocore or aiobotocore in the Python stack."
+      "rule": "Pinned original Memray high-watermark records; scripts/memory_groups.py (python-stack-v1) classifies each record once using the measured route source. Sum bytes / 2^20; all groups sum to the unchanged peak. SDK stacks checked first; missing Python stacks remain unattributed. Top five plus expandable remainder; downloads retain all groups."
     },
     {
       "metric": "CPU comparisons with previous stage",

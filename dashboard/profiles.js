@@ -189,7 +189,11 @@ function functionResult(stage, workloadId, label) {
 
 function allocation(stage, workloadId, labels) {
   const accepted = Array.isArray(labels) ? labels : [labels];
-  return workload(stage.memory, workloadId)?.allocations?.find(item => accepted.includes(item.label))?.mib;
+  const groups = workload(stage.memory, workloadId)?.allocations;
+  if (!groups) return undefined;
+  const matches = groups.filter(item => accepted.includes(item.label));
+  if (!matches.length && !stage.memory.grouping) return undefined;
+  return matches.reduce((total, item) => total + item.mib, 0);
 }
 
 function axisScale(maximum) {
@@ -521,9 +525,20 @@ function renderCpuComparison(stages) {
 function detailedMemoryTables(stage) {
   const details = html('details', 'profile-stage-details');
   details.append(html('summary', '', `${stage.title} · exact memory tables`));
+  details.append(html('p', 'profile-meta', 'Five largest groups at the recorded peak. Test data and GET seeding are included. No Python stack means attribution is unavailable.'));
   stage.memory.workloads.forEach(item => {
     details.append(html('h4', '', `${item.label} · ${number(item.peak_mib)} MiB peak`));
-    details.append(profileTable(`${stage.title} ${item.label} allocations`, ['Allocation group', 'MiB at peak'], item.allocations.map(result => [result.label, number(result.mib)]), [1]));
+    const groups = [...item.allocations].sort((a, b) => b.mib - a.mib || a.label.localeCompare(b.label));
+    const visible = groups.slice(0, 5);
+    const smaller = groups.slice(5);
+    if (smaller.length) visible.push({ label: `Remaining smaller groups (${smaller.length})`, mib: smaller.reduce((total, result) => total + result.mib, 0) });
+    const rows = results => results.map(result => [result.label, number(result.mib), `${number(item.peak_mib ? result.mib / item.peak_mib * 100 : 0, 1)}%`]);
+    details.append(profileTable(`${stage.title} ${item.label} allocations`, ['Allocation group', 'MiB at peak', '% of peak'], rows(visible), [1, 2]));
+    if (smaller.length) {
+      const remainder = html('details', 'profile-notes');
+      remainder.append(html('summary', '', 'Show remaining smaller groups'), profileTable(`${stage.title} ${item.label} smaller allocations`, ['Allocation group', 'MiB at peak', '% of peak'], rows(smaller), [1, 2]));
+      details.append(remainder);
+    }
     details.append(profileSource(stage, item.source_id, 'Download Memray recording'));
   });
   return details;
@@ -539,7 +554,7 @@ function renderMemoryComparison(stages) {
   section.append(comparisonChart('Peak tracked memory by workload', 'Same original pytest-memray workflow · lower is better', stages, rows, 'MiB', 1, { x: 'Workload', y: 'Peak tracked memory (MiB)' }));
 
   const drivers = [
-    ['Batch representation', ['Serialize full batch', 'Batch buffer']],
+    ['Batch representation', ['Serialize full batch', 'Batch buffer', 'Encoded run JSON', 'Per-run buffer']],
     ['Run dictionaries', 'Run dictionary construction'],
     ['S3 SDK / data', 'S3 SDK / data'],
     ['HTTP request body', 'HTTP request body'],
@@ -548,7 +563,7 @@ function renderMemoryComparison(stages) {
     label,
     values: stages.map(stage => allocation(stage, 'post-500-10kb', aliases))
   })).filter(row => row.values.every(Number.isFinite));
-  section.append(comparisonChart('POST 500 · allocation drivers at peak', 'Diagnostic allocation groups · directly comparable labels only', stages, drivers, 'MiB', 1, { x: 'Allocation group', y: 'Allocation at peak (MiB)' }));
+  section.append(comparisonChart('POST 500 · allocation drivers at peak', 'Recorded stack attribution · absent groups are zero at that peak, not necessarily absent throughout execution', stages, drivers, 'MiB', 1, { x: 'Allocation group', y: 'Allocation at peak (MiB)' }));
 
   const details = html('details', 'profile-detail-group');
   details.append(html('summary', '', 'Exact memory tables and source recordings'));

@@ -13,6 +13,7 @@ from scripts.benchmark_dashboard import (
     ReportStore,
     create_app,
 )
+from scripts.memory_groups import GROUPING_VERSION, allocation_group
 
 
 def report():
@@ -167,6 +168,13 @@ def test_get_optimization_interpretations(tmp_path, monkeypatch):
         assert len(stage["cpu"]["phase_medians"]) == 4
         assert stage["cpu"]["workloads"][2]["functions"][1]["calls"] == 1
         for workload in stage["memory"]["workloads"]:
+            assert stage["memory"]["grouping"]["version"] == GROUPING_VERSION
+            assert workload["allocations"] == sorted(
+                workload["allocations"], key=lambda row: (-row["mib"], row["label"])
+            )
+            assert all(
+                "not classified" not in row["label"] for row in workload["allocations"]
+            )
             assert math.isclose(
                 sum(row["mib"] for row in workload["allocations"]),
                 workload["peak_mib"],
@@ -193,6 +201,48 @@ def test_get_optimization_interpretations(tmp_path, monkeypatch):
     assert bulk["title"] == "Bulk PostgreSQL writes"
     assert bulk["review_status"].startswith("Uncommitted")
     assert bulk["findings"][2]["status"] == "Mixed"
+    post_memory = bulk["memory"]["workloads"][0]
+    assert [row["label"] for row in post_memory["allocations"][:5]] == [
+        "Benchmark-generated test data",
+        "Unattributed (no Python stack)",
+        "Decoded request JSON",
+        "Batch buffer",
+        "HTTP request body",
+    ]
+    assert math.isclose(post_memory["peak_mib"], 151.3925256729126)
+    decoder = bulk["memory"]["workloads"][2]["allocations"][0]
+    assert decoder == {"label": "Decode retrieved field JSON", "mib": 8}
+    assert allocation_group([], []) == "Unattributed (no Python stack)"
+    assert (
+        allocation_group([("raw_decode", "/lib/json/decoder.py", 1)], [])
+        == "Decoded request JSON"
+    )
+    assert (
+        allocation_group([("body", "/lib/starlette/requests.py", 1)], [])
+        == "HTTP request body"
+    )
+    assert (
+        allocation_group([("validate", "/lib/fastapi/_compat.py", 1)], [])
+        == "Model validation"
+    )
+    assert (
+        allocation_group([("load", "/lib/botocore/loaders.py", 1)], [])
+        == "S3 SDK / data"
+    )
+    assert (
+        allocation_group(
+            [("create_runs", "/app/api/routes/runs.py", 1)],
+            ["batch_data = batch.getvalue()"],
+        )
+        == "Batch buffer"
+    )
+    assert (
+        allocation_group(
+            [("<listcomp>", "/app/api/routes/runs.py", 1)],
+            ["orjson.loads(data[start:end])"],
+        )
+        == "Decode retrieved field JSON"
+    )
     for workload, serializations in zip(
         bulk["cpu"]["workloads"][:2], (6000, 600), strict=True
     ):
@@ -252,6 +302,10 @@ def test_dashboard_serves_assets_and_persists_only_valid_same_origin_labels(
         assert math.isclose(
             sum(row["mib"] for row in workload["allocations"]), workload["peak_mib"]
         )
+    assert interpretation["memory"]["workloads"][2]["allocations"][0] == {
+        "label": "Decode retrieved field JSON",
+        "mib": 8,
+    }
     saved = tmp_path / "interpretations"
     saved.mkdir()
     cpu_text = "Clock type: CPU\n"
