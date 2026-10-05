@@ -1,0 +1,190 @@
+{
+  "schema_version": 1,
+  "purpose": "Recorded baseline and final results; cleanup did not rerun measurements.",
+  "measurement_scope": {
+    "latency": "Original four pytest-benchmark workloads, in-process API requests; median of one baseline suite versus median of three final suite medians.",
+    "memory": "Original pytest-memray whole-test allocation high-watermarks; one baseline capture versus median of three final captures. Not server RSS.",
+    "cpu": "Yappi CPU clock, cold first requests in three fresh processes per workload. Profiler overhead included; not benchmark latency.",
+    "limitations": [
+      "Single original baseline suite; cumulative observations are not controlled causal estimates.",
+      "Raw recordings and per-experiment interpretations are preserved locally, not included in this submission.",
+      "Results identify the measured frozen application; later code changes require new measurement before claiming identical performance."
+    ]
+  },
+  "baseline_revision": "bdf123994e632380fe5a76e2e998ce7700c8ece9",
+  "measured_application_sha256": "25468b27b815007df25c43400a609e2e50724f36a90f46d746cc2fa6634b7138",
+  "workloads": [
+    {
+      "id": "post-500-10kb",
+      "label": "POST 500 \u00d7 10 KB",
+      "before_median_ms": 2107.1943749998354,
+      "after_median_ms": 332.0187499921303,
+      "before_peak_mib": 191.40101718902588,
+      "after_peak_mib": 100.73324203491211,
+      "before_benchmark_medians_ms": [
+        2107.1943749998354
+      ],
+      "after_benchmark_medians_ms": [
+        322.8244589990936,
+        332.0187499921303,
+        355.82933301338926
+      ],
+      "after_peak_repeats_mib": [
+        100.72536849975586,
+        100.73335647583008,
+        100.73324203491211
+      ],
+      "latency_reduction_pct": 84.24356319800084,
+      "memory_reduction_pct": 47.370581664449105
+    },
+    {
+      "id": "post-50-100kb",
+      "label": "POST 50 \u00d7 100 KB",
+      "before_median_ms": 619.5012499997574,
+      "after_median_ms": 329.28512498619966,
+      "before_peak_mib": 132.3521022796631,
+      "after_peak_mib": 85.36749935150146,
+      "before_benchmark_medians_ms": [
+        619.5012499997574
+      ],
+      "after_benchmark_medians_ms": [
+        301.8811669899151,
+        331.471874989802,
+        329.28512498619966
+      ],
+      "after_peak_repeats_mib": [
+        85.35297298431396,
+        85.36749935150146,
+        85.36749935150146
+      ],
+      "latency_reduction_pct": 46.84673759958861,
+      "memory_reduction_pct": 35.49970277682636
+    },
+    {
+      "id": "get-10kb",
+      "label": "GET 10 KB",
+      "before_median_ms": 88.15822899987324,
+      "after_median_ms": 38.35643750790041,
+      "before_peak_mib": 14.624557495117188,
+      "after_peak_mib": 9.214622497558594,
+      "before_benchmark_medians_ms": [
+        88.15822899987324
+      ],
+      "after_benchmark_medians_ms": [
+        38.35643750790041,
+        41.31254198728129,
+        37.318478993256576
+      ],
+      "after_peak_repeats_mib": [
+        9.214622497558594,
+        9.221558570861816,
+        9.205349922180176
+      ],
+      "latency_reduction_pct": 56.49137018399546,
+      "memory_reduction_pct": 36.992127791660366
+    },
+    {
+      "id": "get-100kb",
+      "label": "GET 100 KB",
+      "before_median_ms": 95.23764600021423,
+      "after_median_ms": 42.516145505942404,
+      "before_peak_mib": 7.125877380371094,
+      "after_peak_mib": 2.429436683654785,
+      "before_benchmark_medians_ms": [
+        95.23764600021423
+      ],
+      "after_benchmark_medians_ms": [
+        39.22333300579339,
+        42.516145505942404,
+        43.15658350242302
+      ],
+      "after_peak_repeats_mib": [
+        2.429436683654785,
+        2.429436683654785,
+        2.429436683654785
+      ],
+      "latency_reduction_pct": 55.35783664177634,
+      "memory_reduction_pct": 65.90684130564891
+    }
+  ],
+  "cpu_phase_medians": {
+    "baseline": [
+      {
+        "id": "post-500-10kb",
+        "label": "POST 500 \u00d7 10 KB",
+        "total_s": 5.396897,
+        "imports_s": 3.38943,
+        "startup_s": 0.232473,
+        "first_request_s": 1.770919
+      },
+      {
+        "id": "post-50-100kb",
+        "label": "POST 50 \u00d7 100 KB",
+        "total_s": 4.516401,
+        "imports_s": 3.421856,
+        "startup_s": 0.23607,
+        "first_request_s": 0.77672
+      },
+      {
+        "id": "get-10kb",
+        "label": "GET 10 KB",
+        "total_s": 3.997455,
+        "imports_s": 3.416192,
+        "startup_s": 0.233585,
+        "first_request_s": 0.350064
+      },
+      {
+        "id": "get-100kb",
+        "label": "GET 100 KB",
+        "total_s": 4.083051,
+        "imports_s": 3.381254,
+        "startup_s": 0.237707,
+        "first_request_s": 0.471408
+      }
+    ],
+    "final": [
+      {
+        "id": "post-500-10kb",
+        "label": "POST 500 \u00d7 10 KB",
+        "total_s": 4.105257,
+        "imports_s": 3.380665,
+        "startup_s": 0.238419,
+        "first_request_s": 0.485435
+      },
+      {
+        "id": "post-50-100kb",
+        "label": "POST 50 \u00d7 100 KB",
+        "total_s": 3.967357,
+        "imports_s": 3.334975,
+        "startup_s": 0.237537,
+        "first_request_s": 0.393141
+      },
+      {
+        "id": "get-10kb",
+        "label": "GET 10 KB",
+        "total_s": 3.781499,
+        "imports_s": 3.33965,
+        "startup_s": 0.243405,
+        "first_request_s": 0.183929
+      },
+      {
+        "id": "get-100kb",
+        "label": "GET 100 KB",
+        "total_s": 3.768717,
+        "imports_s": 3.34977,
+        "startup_s": 0.240101,
+        "first_request_s": 0.180862
+      }
+    ]
+  },
+  "provenance": [
+    {
+      "archived_source": "baseline.json",
+      "sha256": "5a4910fcce835e0a5e2e725eb1ac613adecb14660c3b7054a42a05374b07399e"
+    },
+    {
+      "archived_source": "frozen-final.json",
+      "sha256": "452185f3ee328e54ceec562d9c881f89762a11a67531923f1df5fa96caec7c8b"
+    }
+  ]
+}

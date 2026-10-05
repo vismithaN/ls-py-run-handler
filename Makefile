@@ -1,7 +1,4 @@
-.PHONY: db-up db-down db-migrate db-downgrade db-migrate-test server format lint lint-fix test test-setup benchmark benchmark-compare benchmark-compare-save memprofile measure
-
-# Options for the optional measurement harness only
-MEASURE_ARGS ?= --stage baseline
+.PHONY: db-up db-down db-migrate db-downgrade db-migrate-test server format lint lint-fix test test-setup benchmark benchmark-compare benchmark-compare-save memprofile
 
 # Start all database services defined in docker-compose-db.yaml
 db-up:
@@ -60,7 +57,3 @@ memprofile: test-setup
 	@memory_profile_dir=$$(mktemp -d "profiles/memory/$$(date -u +%Y%m%dT%H%M%SZ)-XXXXXXXX") && \
 		echo "Saving memory profiles to $$memory_profile_dir" && \
 		RUN_HANDLER_ENV=test poetry run pytest tests/benchmarks/test_run_performance.py -v --memray --memray-bin-path="$$memory_profile_dir"
-
-# Optional supplementary measurements; resets test resources per workload/pass/session
-measure:
-	RUN_HANDLER_ENV=test poetry run python -m scripts.measure $(MEASURE_ARGS)

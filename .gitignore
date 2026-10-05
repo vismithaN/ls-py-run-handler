@@ -186,3 +186,14 @@ cython_debug/
 /tests/test_dashboard.py
 /tests/dashboard_stages.test.cjs
 /reports/dashboard-history.json
+
+# Local experiment tooling and history; submission evidence is kept separately.
+/EXPERIMENT_TEMPLATE.md
+/reports/interpretations/
+/reports/figures/*.svg
+/scripts/measure.py
+/scripts/measurement_collectors.py
+/scripts/measurement_cpu.py
+/scripts/measurement_workloads.py
+/scripts/memory_groups.py
+/scripts/build_optimization_figures.py

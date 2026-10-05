@@ -797,7 +797,7 @@
     },
     {
       "id": "worker-ram",
-      "title": "Fourth improvement: Incremental POST parsing — worker RAM",
+      "title": "Fourth improvement: Incremental POST parsing \u2014 worker RAM",
       "scope": "Linux/ARM64, 1 Uvicorn worker, 1 vCPU, 1 GiB, no swap or profiler; real HTTP.",
       "panels": [
         {
@@ -1110,5 +1110,6 @@
         }
       ]
     }
-  ]
+  ],
+  "source_availability": "Source paths identify archived local recordings and interpretations. The originals and figure-generation script are excluded from the submission; plotted values, repeat arrays and provenance hashes are included here."
 }

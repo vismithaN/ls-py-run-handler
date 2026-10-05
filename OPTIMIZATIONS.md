@@ -27,8 +27,7 @@ implementation.
   - [Remaining production concerns](#remaining-production-concerns)
   - [Future improvements I would test—not implemented](#future-improvements-i-would-testnot-implemented)
 - [11. Final verification and evidence](#11-final-verification-and-evidence)
-  - [Commands and output locations](#commands-and-output-locations)
-  - [Draft review before final submission](#draft-review-before-final-submission)
+  - [Commands and submission evidence](#commands-and-submission-evidence)
 - [Closing explanation](#closing-explanation)
 - [Appendix: test coverage and measurement setup](#appendix-test-coverage-and-measurement-setup)
   - [Correctness coverage](#correctness-coverage)
@@ -97,11 +96,13 @@ for repeated work, sequential storage calls and overlapping payloads in memory.
 This suggested possible bottlenecks, but I wanted profiling evidence before
 choosing an optimization.
 
-I built an [experiment template](EXPERIMENT_TEMPLATE.md) to record each
+I used a local experiment journal to record each
 hypothesis, expected outcome, before/after measurements and the decision to
 keep or revert it. I kept the supplied benchmarks and Memray workflow, added
 Yappi CPU profiling and a detachable diagnostic harness, and saved reports for
-comparison in a local dashboard.
+comparison in a local dashboard. That tooling and its detailed experiment history
+are preserved locally and excluded from this submission. The supplied benchmark
+and memory commands remain available.
 
 Before measuring the baseline, I expanded correctness coverage so a faster
 implementation could not silently change API behavior or stored values. I
@@ -131,14 +132,12 @@ The evaluation commands were:
 | `make test` | Run correctness tests, excluding benchmarks |
 | `make benchmark` | Run the original four workloads without a profiler and save latency results/raw samples |
 | `make memprofile` | Run those workloads with Memray to capture allocation sources and tracked peaks—not server RAM |
-| `make measure MEASURE_ARGS="--stage baseline --passes cpu"` | Capture cold Yappi CPU profiles: three fresh processes per workload, with imports/startup/request phases separated |
-| `make measure MEASURE_ARGS="--stage baseline --passes diagnostic"` | Count DB/S3 operations and new connections, and measure elapsed request phases in a separate instrumented pass |
 
 PostgreSQL and MinIO must be running (`make db-up`). `make test`,
-`make benchmark`, `make memprofile` and the diagnostic pass reset the dedicated
-test database/bucket; run them without other writers to those resources. CPU
-profiling uses isolated temporary resources and cleans them up. Replace
-`baseline` with the experiment's stage name to label CPU/diagnostic reports.
+`make benchmark` and `make memprofile` reset the dedicated test database/bucket;
+run them without other writers to those resources. The historical CPU profiling
+harness used isolated temporary resources and cleaned them up; it is not
+included in this submission.
 
 For each experiment, I followed the same cycle:
 
@@ -165,10 +164,9 @@ The baseline reports showed:
 | Memray memory profile | Full-batch serialization allocations at peak | 32.000 MiB | 32.000 MiB |
 | Memray memory profile | Run-dictionary construction allocations at peak | 5.673 MiB | 3.715 MiB |
 
-**Source.** [baseline CPU and memory tables](reports/interpretations/baseline.json),
-including the named recordings and their hashes. CPU rows are from one cold
-capture per workload; memory rows are live allocation groups at the whole-test
-peak, not server RAM.
+**Source.** Baseline CPU and memory recordings and their hashes are archived
+locally. CPU rows are from one cold capture per workload; memory rows are live
+allocation groups at the whole-test peak, not server RAM.
 
 The code explained the 1,500 searches: three fields × 500 runs, each searched
 in the completed batch. CPU evidence identified the search cost; Memray
@@ -219,7 +217,7 @@ trade-off because it reduced total CPU and latency while preserving correctness.
 **Decision: retained.** The mechanism and substantial measured change justify
 the extra offset-recording logic without a schema migration.
 
-Evidence: [one-pass interpretation](reports/interpretations/one-pass-encoder.json).
+Evidence: one-pass interpretation (archived locally).
 
 ## 4. Second improvement: S3 SDK session reuse
 
@@ -232,7 +230,7 @@ Evidence: [one-pass interpretation](reports/interpretations/one-pass-encoder.jso
 Memray also attributed 43.043 MiB (POST 500) and 26.917 MiB (POST 50) at peak
 to S3 SDK / data allocations.
 
-**Source.** [one-pass CPU and memory tables](reports/interpretations/one-pass-encoder.json).
+**Source.** one-pass CPU and memory tables (archived locally).
 The CPU row includes the dependency's callees; the memory group includes SDK
 data handling, not just session construction. These measurements do not isolate
 the cost of `get_session()`.
@@ -265,8 +263,8 @@ An application-lifetime client is a different experiment and was deferred.
 
 Both columns measure inclusive CPU time in `get_s3_client()`, including its
 callees. These are session-1 cold-profile observations, not whole-request CPU
-or elapsed request time. Sources: [before reuse](reports/interpretations/one-pass-encoder.json)
-and [after reuse](reports/interpretations/s3-session-reuse.json).
+or elapsed request time. Sources: before reuse (archived locally)
+and after reuse (archived locally).
 
 **Latency results: the complete API request before and after.**
 
@@ -304,7 +302,7 @@ its shorter request, but does not establish that “three reads” alone caused 
 **Decision: retained.** Repeated GET results support the benefit in this setup.
 I do not claim a precise POST speedup or connection-pooling benefit.
 
-Evidence: [SDK-session interpretation](reports/interpretations/s3-session-reuse.json)
+Evidence: SDK-session interpretation (archived locally)
 and the six explicitly identified on/off source reports in
 [figure data](reports/figures/data.json).
 
@@ -318,7 +316,7 @@ that CPU profiling alone could not quantify as elapsed waiting time:
 | INSERT calls per request | 500 | 50 |
 | Median database-write elapsed time | 226.621 ms | 23.572 ms |
 
-**Source.** [COPY evidence](reports/interpretations/bulk-postgres-writes.json),
+**Source.** COPY evidence (archived locally),
 `before-diagnostic`: 15 measured requests per workload across three sessions.
 These are instrumented phase timings, not Yappi CPU seconds or the original
 benchmark's request latency.
@@ -369,8 +367,8 @@ across the two stores was not implemented and is not claimed.
 **Decision: retained**, for the clear POST-500 benefit and atomic database writes.
 No meaningful memory gain or uniform POST-50/tail improvement is claimed.
 
-Evidence: [COPY interpretation](reports/interpretations/bulk-postgres-writes.json).
-The [logbook](EXPERIMENT_TEMPLATE.md) also records the separate upload-tail
+Evidence: COPY interpretation (archived locally).
+The local experiment logbook also records the separate upload-tail
 investigation and its local evidence paths.
 
 ## 6. Fourth improvement: Incremental POST parsing
@@ -387,7 +385,7 @@ payload representations alive at the test peak:
 | Model validation | 9.673 MiB | 3.715 MiB |
 | Outgoing batch buffer | 16.498 MiB | 16.550 MiB |
 
-**Source.** [post-COPY memory breakdown](reports/interpretations/bulk-postgres-writes.json).
+**Source.** post-COPY memory breakdown (archived locally).
 These are selected groups from the same whole-test peak, not the complete
 allocation total or worker RSS. They showed why input decoding/model lifetime
 was worth testing, even after latency improved.
@@ -492,7 +490,7 @@ About 31 ms extra on POST-50 was accepted for this project's memory objective;
 it is not automatically acceptable for a production latency SLO. I did not
 declare the latency penalty solved or describe all POST calls as 10% slower.
 
-Evidence: [incremental-parser interpretation](reports/interpretations/incremental-post-parsing.json),
+Evidence: incremental-parser interpretation (archived locally),
 including exact repeat arrays, RAM assumptions and pinned raw sources.
 
 ## 7. Fifth improvement: Size-guided JSON read-ahead
@@ -505,7 +503,7 @@ showed repeated decoding attempts:
 | `JSONDecoder.raw_decode` | 123 | 0.080644 s | 0.089092 s |
 | `JSONDecodeError.__init__` | 66 | 0.000337 s | 0.008448 s |
 
-**Source.** [incremental-parser CPU table](reports/interpretations/incremental-post-parsing.json),
+**Source.** incremental-parser CPU table (archived locally),
 session 1. This cold capture also includes SDK JSON decoding; 123 is not a
 pure per-run parser count, and inclusive rows overlap. The incomplete-input
 retries and the parser code motivated reducing repeated attempts—not just
@@ -544,8 +542,8 @@ targets the observed repeated-parse work without a new dependency. I do not
 subtract 14.9% from the earlier 10.4% penalty, add the percentages, or claim that
 the latency trade-off has been eliminated: their fresh controls differ.
 
-Evidence: [historical final-focus interpretation](reports/interpretations/post-get-focus.json)
-and [final-results interpretation](reports/interpretations/frozen-final.json).
+Evidence: historical final-focus interpretation (archived locally)
+and final-results interpretation (archived locally).
 
 ## 8. Other retained changes—not counted as optimization wins
 
@@ -558,7 +556,7 @@ and [final-results interpretation](reports/interpretations/frozen-final.json).
 | S3 GET attempts per request | 3 | 3 |
 | New S3 TCP connections per request | 3 | 3 |
 
-**Source.** [one-range experiment](reports/interpretations/one-s3-read.json),
+**Source.** one-range experiment (archived locally),
 `diagnostic-before`: three sessions of five requests per workload. The reads
 were concurrent, not three sequential network waits.
 
@@ -586,7 +584,7 @@ The 23-byte overhead is specific to these fixtures. Older same-object references
 can be farther apart, so their combined span can download larger gaps. Fewer
 requests do not automatically mean fewer transferred bytes or lower latency.
 
-Evidence: [one-range interpretation](reports/interpretations/one-s3-read.json).
+Evidence: one-range interpretation (archived locally).
 
 ### Direct GET response encoding: cleanup
 
@@ -599,7 +597,7 @@ those values again with `jsonable_encoder` before serializing the response:
 | `jsonable_encoder` calls | 631 | 6,157 |
 | Inclusive CPU in `jsonable_encoder` | 0.014963 s | 0.131431 s |
 
-**Source.** [GET-encoding experiment](reports/interpretations/get-response-encoding.json),
+**Source.** GET-encoding experiment (archived locally),
 `before-cpu-get-10kb-s1` and `before-cpu-get-100kb-s1`. These are single cold
 captures; inclusive CPU includes callees and is not unprofiled request latency.
 
@@ -629,8 +627,8 @@ Bypassing conversion is safe here because the returned IDs are strings and the
 other values are JSON-compatible. Future non-JSON values or response-model
 validation would require revisiting that assumption.
 
-Evidence: [GET-encoding interpretation](reports/interpretations/get-response-encoding.json)
-and the POST response decision in the [logbook](EXPERIMENT_TEMPLATE.md).
+Evidence: GET-encoding interpretation (archived locally)
+and the POST response decision in the local experiment logbook.
 
 ## 9. Experiments I tested and did not keep
 
@@ -667,9 +665,9 @@ not evidence that a larger GET uses less real RAM.
 
 The full-run-reference migration was removed. Dual writes, backfill and staged
 production rollout were considered costs—not implemented features in the final
-system. Evidence for rejected experiments is in the tracked
-[interpretations](reports/interpretations/) and the detailed
-[experiment logbook](EXPERIMENT_TEMPLATE.md).
+system. Detailed evidence for rejected experiments and the experiment logbook
+are archived locally. Their decisions and measured tradeoffs are summarized
+in this section; the submission includes the baseline/final evidence below.
 
 ## 10. How strong are the claims?
 
@@ -752,8 +750,8 @@ totals matched all twelve final Memray peaks; source snapshots identify the
 measured final code. Temporary experiment databases/buckets were cleaned up;
 shared development/test storage was not used for those isolated comparisons.
 
-The exact headline evidence is pinned in the
-[final-results interpretation](reports/interpretations/frozen-final.json):
+The exact headline values, repeat arrays, measurement scope and provenance
+hashes are included in [benchmark-results.json](reports/benchmark-results.json):
 
 | Evidence identity | Recorded value |
 |---|---|
@@ -781,73 +779,38 @@ tracked separately, not counted as a request-latency optimization. The table
 includes profiler overhead and is supporting evidence, not a substitute for
 the headline unprofiled timings.
 
-### Commands and output locations
+### Commands and submission evidence
 
-The evaluation commands are listed in
-[Approach and evaluation](#2-approach-and-evaluation). Their reports are saved
-in these locations:
+The available evaluation commands are listed in
+[Approach and evaluation](#2-approach-and-evaluation): `make test`,
+`make benchmark`, and `make memprofile`. The original four benchmark workloads
+and timing wrapper remain unchanged. The test-bucket reset helper is retained
+because those commands depend on it.
 
-| Output | Location |
+| Included evidence | Location |
 |---|---|
-| Original timing JSON and raw samples | `.benchmarks/` |
-| Original Memray binaries | `profiles/memory/<run>/` |
-| Yappi profiles | `profiles/cpu/<run>/session-N/<workload>/` |
-| CPU phase summaries, diagnostics and experiment receipts | `measurements/<run>/` |
-| Readable, hash-pinned CPU/memory interpretations | `reports/interpretations/` |
-| Submission charts, exact plotted values and input hashes | `reports/figures/` |
+| Baseline/final latency, allocation peaks, repeat arrays and cold CPU phase medians | [benchmark-results.json](reports/benchmark-results.json) |
+| Charts embedded in this report | `reports/figures/*.png` |
+| Exact plotted values, repeats and provenance hashes for all charts | [data.json](reports/figures/data.json) |
 
-The dashboard was used locally to explore **Benchmark**, **Profiling**
-(CPU/Memory), and separate **Experiment history**. Its source and dedicated
-tests are excluded from the submission; a shareable dashboard URL can accompany
-the report separately. The static figures and result interpretations remain
-available in the repository. Reverted candidates/control repeats are not
-promoted to retained graph points. Excluding the dashboard source does not
-change the measured application's behavior or the recorded results.
+The figures are finished PNG assets. All chart axes start at zero; red shades
+show baseline/control versions and green shows the changed version. Bar values
+and the documented measurement scope establish the interpretation. The chart
+values and repeats are portable; no dashboard is needed to read the report.
 
-The draft's static figures are self-contained PNG/SVG assets. Their numbers and
-repeat arrays are in [data.json](reports/figures/data.json), with the paths,
-byte sizes and SHA-256 hashes of the 19 input documents used to build them.
-The charts show summary bars without individual repeat markers; all bar axes
-start at zero. Red shades show baseline/control versions; green shows the
-changed version. The bar values—not the colors—indicate improvement or regression.
+The dashboard, supplementary CPU/diagnostic harness, chart generator, SVG
+exports, detailed stage interpretations and experiment journal are preserved
+locally and excluded from the submission. A hosted dashboard link can accompany
+the report later. Raw timing/profiler recordings remain in the local ignored
+`.benchmarks/`, `profiles/`, and `measurements/` directories. Source paths in the
+plotted-data manifest identify those archived originals; provenance hashes do
+not reconstruct missing recordings. Historical supplementary profiling is
+therefore documented, rather than presented as a command available in a fresh
+clone. The original latency and allocation workflows remain runnable.
 
-SVG figures can be regenerated without application dependencies:
-
-```bash
-poetry run python -m scripts.build_optimization_figures
-```
-
-`--png` additionally requires Pillow; `--verify-sources` checks the original
-local input hashes. Neither option runs the API benchmarks or changes their
-stored reports. PNGs and SVGs are included so the draft can be read without a
-live dashboard.
-
-### Draft review before final submission
-
-- Review the narrative and decide how much rejected-experiment detail belongs
-  in the main document versus an appendix.
-- Keep the classifications intact: measured optimizations, retained cleanup,
-  request consolidation, rejected experiments and deferred pooling.
-- Raw timing/profiler recordings under ignored folders remain **local**, not
-  automatically available in a fresh GitHub clone. The committed interpretations
-  and plotted values are portable, but source hashes alone do not reconstruct
-  missing recordings. Decide whether to include a compact raw-evidence bundle
-  with the final submission; no claim of complete clone-only replay is made here.
-- Prepare a clean submission branch against `main`, preserving the detailed
-  experiment branch separately. The current branch contains 33 commits beyond
-  local `main`, including experiments and reverts; it is the audit trail, not
-  yet a cleaned submission history. Group the final implementation and supporting
-  tests/reporting into a small number of reviewable commits, without rewriting
-  or force-pushing the existing experiment history.
-- Include this exact uppercase filename, `OPTIMIZATIONS.md`, and its figure
-  assets in the pull request. [Existing PR #1](https://github.com/vismithaN/ls-py-run-handler/pull/1)
-  already targets `main`, but this draft and its graphs are still uncommitted.
-  Its title still describes tests; its generated description also needs a
-  reviewer-oriented optimization summary and a link to this report.
-  For clean history, the recommended submission is a new PR from the clean
-  final branch, preserving the current branch/PR as the experiment audit trail.
-  Branch preparation, commits, publication and PR changes require approval;
-  this draft is not yet included in the published PR.
+The included results describe the recorded frozen application fingerprint
+above. Cleanup did not rerun benchmarks or change the reported values; later
+application changes need their own measurements before claiming those results.
 
 ## Closing explanation
 
@@ -908,8 +871,9 @@ and loop overhead are inside it. GET seeding is outside GET timing.
 
 I preserved the original workloads and timing wrapper. The benchmark command
 additionally saves raw samples; the memory command saves its existing captures
-in persistent folders. Supplementary profiling/diagnostics are detachable via
-`make measure`, not injected into the primary benchmark.
+in persistent folders. Historical supplementary profiling/diagnostics were
+collected separately, not injected into the primary benchmark. Their local
+harness is excluded from this submission.
 
 For later A/B experiments, I collected three suites per version, usually in
 the order **before–after–after–before–before–after**. This reduces ordering bias;
