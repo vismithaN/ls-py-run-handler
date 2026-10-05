@@ -1,14 +1,26 @@
-from aiobotocore.session import get_session
+import logging
+
 from fastapi import FastAPI
 
+from ls_py_handler.api.observability import JsonFormatter, RequestLoggingMiddleware
 from ls_py_handler.api.routes.runs import router as runs_router
 from ls_py_handler.config.settings import settings
+from ls_py_handler.s3 import get_s3_session
 
 app = FastAPI(
     title=settings.APP_TITLE,
     description=settings.APP_DESCRIPTION,
     version=settings.APP_VERSION,
 )
+
+# Configure only this application's logs, leaving Uvicorn's handlers unchanged.
+app_logger = logging.getLogger("ls_py_handler")
+handler = logging.StreamHandler()
+handler.setFormatter(JsonFormatter())
+app_logger.addHandler(handler)
+app_logger.setLevel(logging.INFO)
+app_logger.propagate = False
+app.add_middleware(RequestLoggingMiddleware)
 
 # Include routers
 app.include_router(runs_router)
@@ -18,7 +30,7 @@ app.include_router(runs_router)
 async def startup_event():
     """Initialize resources when the application starts."""
     # Create S3 bucket if it doesn't exist
-    session = get_session()
+    session = get_s3_session()
     async with session.create_client(
         "s3",
         endpoint_url=settings.S3_ENDPOINT_URL,
