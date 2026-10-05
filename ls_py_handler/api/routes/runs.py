@@ -1,5 +1,6 @@
 import asyncio
 import io
+import logging
 import uuid
 from typing import Any, Dict, Optional
 
@@ -15,6 +16,7 @@ from ls_py_handler.config.settings import settings
 from ls_py_handler.s3 import get_s3_session
 
 router = APIRouter(prefix="/runs", tags=["runs"])
+logger = logging.getLogger(__name__)
 
 
 class Run(BaseModel):
@@ -186,20 +188,46 @@ async def create_runs(
     object_key, batch_data, records, run_ids = prepared
 
     # Upload the batch data
-    await s3.put_object(
-        Bucket=settings.S3_BUCKET_NAME,
-        Key=object_key,
-        Body=batch_data,
-        ContentType="application/json",
-    )
+    try:
+        await s3.put_object(
+            Bucket=settings.S3_BUCKET_NAME,
+            Key=object_key,
+            Body=batch_data,
+            ContentType="application/json",
+        )
+    except Exception as error:
+        logger.error(
+            "Failed to upload run batch (%s)",
+            type(error).__name__,
+            extra={
+                "operation": "upload_batch",
+                "object_key": object_key,
+                "run_count": len(records),
+                "error_type": type(error).__name__,
+            },
+        )
+        raise
 
     # Send all references together; a failed batch must not leave partial rows.
-    async with db.transaction():
-        await db.copy_records_to_table(
-            "runs",
-            records=records,
-            columns=("id", "trace_id", "name", "inputs", "outputs", "metadata"),
+    try:
+        async with db.transaction():
+            await db.copy_records_to_table(
+                "runs",
+                records=records,
+                columns=("id", "trace_id", "name", "inputs", "outputs", "metadata"),
+            )
+    except Exception as error:
+        logger.error(
+            "Failed to store run batch references (%s)",
+            type(error).__name__,
+            extra={
+                "operation": "write_batch_references",
+                "object_key": object_key,
+                "run_count": len(records),
+                "error_type": type(error).__name__,
+            },
         )
+        raise
 
     # These values are already JSON-compatible; skip FastAPI's conversion walk.
     return ORJSONResponse(
@@ -218,14 +246,26 @@ async def get_run(
     Get a run by its ID.
     """
     # Fetch the run from the PG
-    row = await db.fetchrow(
-        """
-        SELECT id, trace_id, name, inputs, outputs, metadata
-        FROM runs
-        WHERE id = $1
-        """,
-        run_id,
-    )
+    try:
+        row = await db.fetchrow(
+            """
+            SELECT id, trace_id, name, inputs, outputs, metadata
+            FROM runs
+            WHERE id = $1
+            """,
+            run_id,
+        )
+    except Exception as error:
+        logger.error(
+            "Failed to fetch run references (%s)",
+            type(error).__name__,
+            extra={
+                "operation": "fetch_run_references",
+                "run_id": str(run_id),
+                "error_type": type(error).__name__,
+            },
+        )
+        raise
 
     if not row:
         raise HTTPException(status_code=404, detail=f"Run with ID {run_id} not found")
@@ -286,6 +326,15 @@ async def get_run(
             # Older references may point to different S3 objects.
             values = await asyncio.gather(*(fetch_field(ref) for ref in refs))
     except Exception as e:
+        logger.error(
+            "Failed to retrieve stored run data (%s)",
+            type(e).__name__,
+            extra={
+                "operation": "read_run_data",
+                "run_id": str(run_id),
+                "error_type": type(e).__name__,
+            },
+        )
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="Stored run data is unavailable",
