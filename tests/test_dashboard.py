@@ -87,6 +87,26 @@ def test_reports_update_safely_and_keep_comparison_sets_separate(tmp_path):
     second.unlink()
     assert len(store.snapshot()["reports"]) == 1
 
+    history = tmp_path / ".history.json"
+    history.write_text(
+        json.dumps({"benchmarks": {"0001.json": "Rejected experiment"}})
+    )
+    archived_store = ReportStore(tmp_path, history)
+    assert (
+        archived_store.snapshot()["reports"][0]["history_reason"]
+        == "Rejected experiment"
+    )
+    archived_store.rename("0001.json", "Looks retained after renaming")
+    assert (
+        archived_store.snapshot()["reports"][0]["history_reason"]
+        == "Rejected experiment"
+    )
+    assert first.read_bytes() == original
+    history.write_text("invalid history")
+    invalid = archived_store.snapshot()
+    assert any("history metadata" in warning for warning in invalid["warnings"])
+    assert invalid["reports"][0]["history_reason"]
+
 
 def test_profile_stages_use_explicit_order(tmp_path, monkeypatch):
     saved = tmp_path / "interpretations"
@@ -101,7 +121,11 @@ def test_profile_stages_use_explicit_order(tmp_path, monkeypatch):
     optimized["order"] = 0
     (saved / "baseline.json").write_text(json.dumps(baseline))
     (saved / "one-pass-encoder.json").write_text(json.dumps(optimized))
-    store = InterpretationStore(saved)
+    history = tmp_path / "history.json"
+    history.write_text(
+        json.dumps({"profiles": {"one-pass-encoder": "History fixture"}})
+    )
+    store = InterpretationStore(saved, history)
     monkeypatch.setattr(store, "source_status", lambda source: "verified")
 
     snapshot = store.snapshot()
@@ -111,6 +135,8 @@ def test_profile_stages_use_explicit_order(tmp_path, monkeypatch):
         "baseline",
     ]
     assert not snapshot["warnings"]
+    assert snapshot["stages"][0]["history_reason"] == "History fixture"
+    assert snapshot["stages"][1]["history_reason"] is None
 
 
 def test_s3_session_reuse_interpretation_is_comparable(tmp_path, monkeypatch):
@@ -540,13 +566,31 @@ def test_dashboard_serves_assets_and_persists_only_valid_same_origin_labels(
     stage_file = saved / "baseline.json"
     stage_file.write_text(json.dumps(interpretation))
     stage_original = stage_file.read_bytes()
-    with TestClient(create_app(tmp_path, saved), base_url="http://127.0.0.1") as client:
+    history = tmp_path / ".history.json"
+    history.write_text(
+        json.dumps(
+            {
+                "benchmarks": {"baseline.json": "Archived fixture"},
+                "profiles": {"baseline": "Archived fixture"},
+            }
+        )
+    )
+    with TestClient(
+        create_app(tmp_path, saved, history), base_url="http://127.0.0.1"
+    ) as client:
         assert client.get("/").status_code == 200
-        assert client.get("/assets/dashboard.js").status_code == 200
+        benchmark_script = client.get("/assets/dashboard.js")
+        assert benchmark_script.status_code == 200
+        assert "Darwin-CPython-3.11-64bit/0006_baseline.json" in benchmark_script.text
+        assert "displayedEntries(data.reports, 'benchmarks')" in benchmark_script.text
         assert client.get("/assets/styles.css").status_code == 200
         profile_script = client.get("/assets/profiles.js")
         assert profile_script.status_code == 200
+        assert "displayedEntries(data.stages, 'profiles')" in profile_script.text
+        assert "profiles: ['one-s3-read']" in benchmark_script.text
         assert "active.comparison_stage_ids.map" in profile_script.text
+        assert "INTRODUCTION TO THE NEXT EXPERIMENT" not in profile_script.text
+        assert "profile-next-experiment" not in profile_script.text
         assert (
             "['Decoded request JSON', 'Model validation', "
             "'Request JSON parsing + validation']" in profile_script.text
@@ -557,6 +601,21 @@ def test_dashboard_serves_assets_and_persists_only_valid_same_origin_labels(
         assert 'id="sidebar-toggle"' in page
         assert 'id="dashboard-views"' in page
         assert 'id="profile-stage-nav"' in page
+        assert 'id="history-tab"' in page
+        assert 'data-view="benchmarks">Benchmark</button>' in page
+        assert 'data-view="profiles">Profiling</button>' in page
+        assert 'id="history-panel"' in page
+        assert 'aria-controls="history-panel"' in page
+        assert 'aria-label="Archived profile interpretations"' in page
+        assert 'aria-label="Archived benchmark reports"' in page
+        assert 'id="profile-stage-history"' not in page
+        assert 'id="benchmark-history"' not in page
+        assert 'id="context"' not in page
+        assert "RUN HANDLER / OPTIMIZATION EXPERIMENT" not in page
+        assert (
+            "Benchmark graphs and the profile evidence behind each optimization."
+            not in page
+        )
         assert 'aria-label="Profile stages"' in page
         assert 'id="profile-view-title"' in page
         assert 'id="profile-stage-summary"' in page
@@ -565,6 +624,7 @@ def test_dashboard_serves_assets_and_persists_only_valid_same_origin_labels(
         assert 'id="comparison-set-control" hidden' in page
         assert "How results and stage names work" not in page
         assert client.get("/api/reports").json()["reports"][0]["label"] == "Baseline"
+        assert client.get("/api/reports").json()["reports"][0]["history_reason"]
         payload = {"report_id": "baseline.json", "label": "Connection pooling"}
         assert client.post("/api/stage-name", json=payload).status_code == 403
         assert (
@@ -618,6 +678,7 @@ def test_dashboard_serves_assets_and_persists_only_valid_same_origin_labels(
         (profile_folder / "cpu.txt").write_text(cpu_text)
         result = client.get("/api/interpretations").json()
         assert len(result["stages"]) == 1 and "1 missing" in result["warnings"][0]
+        assert result["stages"][0]["history_reason"] == "Archived fixture"
         assert result["stages"][0]["source_verification"] == {
             "total": 2,
             "verified": 1,
@@ -647,12 +708,13 @@ def test_dashboard_serves_assets_and_persists_only_valid_same_origin_labels(
 
         # A fresh app reads the saved interpretation without browser/server state.
         with TestClient(
-            create_app(tmp_path, saved), base_url="http://127.0.0.1"
+            create_app(tmp_path, saved, history), base_url="http://127.0.0.1"
         ) as restarted:
             assert (
                 restarted.get("/api/interpretations").json()["stages"][0]["title"]
                 == "Baseline"
             )
+            assert restarted.get("/api/reports").json()["reports"][0]["history_reason"]
 
         stage_file.write_text("unfinished JSON")
         result = client.get("/api/interpretations").json()

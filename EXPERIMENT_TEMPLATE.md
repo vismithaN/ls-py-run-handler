@@ -1321,3 +1321,48 @@ all pending code, tests, dashboard and curated interpretation/logbook changes
 on `codex/baseline-correctness-tests`. Original raw benchmark and profiler
 recordings remain local in their existing ignored folders; source hashes and
 the displayed results are preserved in the curated reports.
+
+### 2026-10-04 — Dashboard presentation cleanup
+
+Rejected candidates and paired control repeats are moved to a separate
+**Experiment history** tab. Benchmark graphs, exact-value tables and SVG exports
+exclude those report IDs; retained profile comparisons exclude archived stages.
+The original baseline, retained stages and frozen-final repeats remain visible.
+`reports/dashboard-history.json` records the explicit IDs and reasons, so
+renaming a stage cannot accidentally put a rejected result back on the graphs.
+Raw measurements and curated interpretations are preserved unchanged; no
+application, benchmark method or recorded metric changes. No new optimization.
+Verified **12 plotted benchmark reports / 20 archived**, **8 retained profile
+stages / 7 archived**, seven dashboard tests, JavaScript syntax and live graph/
+history navigation. Reports remain available through the original download URLs.
+
+**Presentation follow-up — 2026-10-05:** removed the header descriptions and
+graph-context paragraph, reduced theme/status controls, and consolidated
+archived benchmark reports and profile links in the history tab. No reports
+deleted, application changes, benchmark reruns, commit or push.
+Shortened navigation to **Benchmark / Profiling** and removed the duplicate
+next-experiment introduction card from every report. Seven dashboard tests
+passed; all **28 retained/archived CPU and Memory views** checked in the browser.
+
+### 2026-10-05 — Exclude one-S3-read from the optimization dashboard
+
+User requested omitting this request-count change because it did not demonstrate
+a latency or memory improvement. Hide its exact benchmark ID and profile stage
+from both main views and displayed history; retain the code, original reports
+and download endpoints. No measurements or application behavior changed.
+The 12 plotted files previously meant six single reports plus three retained
+parser repeats and three frozen-final repeats, not 12 optimizations. After this
+display-only exclusion: **11 plotted files / 20 archived**, **7 retained profile
+stages / 7 archived**. Repeats remain separate; no averaging or selection added.
+
+### 2026-10-05 — Six benchmark points, not repeat-run points
+
+The benchmark graph now shows baseline plus five retained optimizations.
+The final point is **Incremental POST parsing + tuning**, using all three
+frozen-final suites: median of each reported statistic, not pooled distribution
+statistics or selection of the fastest suite. Its provenance lists all three
+source files; raw rounds from all three remain available. Earlier parser repeats
+and final repeats are supporting evidence in history, not additional points.
+Raw reports, application code and profiler interpretations are unchanged.
+Verified seven dashboard tests, four aggregation tests, and the live six-stage
+graph with final medians matching the pinned frozen-final interpretation.

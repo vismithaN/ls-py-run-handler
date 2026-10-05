@@ -7,10 +7,10 @@ const profileChartObserver = new ResizeObserver(entries => {
 });
 
 function selectDashboardView(view) {
-  const profiles = view === 'profiles';
-  const changed = byId('profile-panel').hidden === profiles;
-  byId('benchmark-panel').hidden = profiles;
-  byId('profile-panel').hidden = !profiles;
+  const panels = { benchmarks: 'benchmark-panel', profiles: 'profile-panel', history: 'history-panel' };
+  if (!panels[view]) view = 'benchmarks';
+  const changed = byId(panels[view]).hidden;
+  Object.entries(panels).forEach(([name, id]) => { byId(id).hidden = name !== view; });
   if (changed) window.scrollTo(0, 0);
   updateProfileStageNav();
   document.querySelectorAll('[data-view]').forEach(button => {
@@ -19,13 +19,18 @@ function selectDashboardView(view) {
     button.tabIndex = selected ? 0 : -1;
   });
   tooltip.hidden = true;
-  history.replaceState(null, '', profiles ? '#profiles' : '#benchmarks');
-  if (profiles) {
-    byId('status').textContent = 'Saved profile comparisons · checks every 3s';
+  history.replaceState(null, '', `#${view}`);
+  if (view === 'profiles') {
+    setLiveStatus('Live · profiles');
     refreshProfiles();
-  } else {
+  } else if (view === 'benchmarks') {
+    setLiveStatus('Live · benchmarks');
     if (state.data) renderCharts();
     refresh();
+  } else {
+    setLiveStatus('Live · history');
+    refresh();
+    refreshProfiles();
   }
 }
 
@@ -34,10 +39,12 @@ const sidebarToggle = byId('sidebar-toggle');
 const sidebarLayout = byId('dashboard-layout');
 const sidebarViews = byId('dashboard-views');
 const profileStageNav = byId('profile-stage-nav');
+const profileHistoryNav = byId('profile-history-nav');
 
 function updateProfileStageNav() {
-  profileStageNav.hidden = sidebarLayout.classList.contains('sidebar-collapsed') ||
+  const hidden = sidebarLayout.classList.contains('sidebar-collapsed') ||
     byId('profile-panel').hidden || !profileState.data?.stages.length;
+  profileStageNav.hidden = hidden;
 }
 
 function setSidebarCollapsed(collapsed) {
@@ -75,7 +82,7 @@ dashboardTabs.forEach((button, index) => {
     selectDashboardView(dashboardTabs[next].dataset.view);
   });
 });
-window.addEventListener('hashchange', () => selectDashboardView(location.hash === '#profiles' ? 'profiles' : 'benchmarks'));
+window.addEventListener('hashchange', () => selectDashboardView(location.hash.slice(1)));
 
 const profileReportTabs = [...document.querySelectorAll('[data-profile-report]')];
 
@@ -327,8 +334,8 @@ function baselineMetricCard(label, value, unit, detail, digits = 3) {
 }
 
 function nextExperiment(stages) {
-  if (stages.at(-1)?.optimization_frozen) return undefined;
   const current = stages.at(-1);
+  if (current?.optimization_frozen || current?.history_reason) return undefined;
   if (current.parser_followup_complete) return null;
   const topCurrent = workload(current.cpu, 'post-500-10kb')?.functions?.reduce((top, item) => !top || item.inclusive_s > top.inclusive_s ? item : top, null);
   if (!topCurrent) return null;
@@ -470,7 +477,7 @@ function renderProfileOverview(stages) {
   evidence.append(html('h3', '', 'What the measurements show'), html('p', '', current.findings?.[0]?.interpretation || current.summary));
   const candidate = nextExperiment(stages);
   const next = html('article');
-  next.append(html('h3', '', current.optimization_frozen ? 'Optimization work frozen' : current.parser_followup_complete ? 'Parser decision' : 'Next optimization candidate'), html('p', '', current.parser_followup_complete ? current.decision_summary || 'Retained with the measured latency trade-off; no further parser change selected.' : candidate ? `${candidate.optimization} — ${candidate.evidence}` : 'Use the detailed evidence below to select the next experiment.'));
+  next.append(html('h3', '', current.history_reason ? 'Experiment history' : current.optimization_frozen ? 'Optimization work frozen' : current.parser_followup_complete ? 'Parser decision' : 'Next optimization candidate'), html('p', '', current.history_reason || (current.parser_followup_complete ? current.decision_summary || 'Retained with the measured latency trade-off; no further parser change selected.' : candidate ? `${candidate.optimization} — ${candidate.evidence}` : 'Use the detailed evidence below to select the next experiment.')));
   story.append(changed, evidence, next);
   section.append(story);
   return section;
@@ -660,14 +667,6 @@ function renderEvidence(stages) {
   });
   section.append(list);
 
-  const candidate = nextExperiment(stages);
-  if (candidate) {
-    const next = html('article', 'profile-next-experiment');
-    next.append(html('p', 'eyebrow', 'INTRODUCTION TO THE NEXT EXPERIMENT'), html('h3', '', candidate.optimization), html('p', '', candidate.evidence), html('p', 'profile-meta', candidate.validation));
-    section.append(next);
-  }
-
-
   const sources = html('details', 'profile-sources');
   sources.append(html('summary', '', 'Pinned reports, source hashes and calculation rules'));
   sources.append(html('h3', '', current.title));
@@ -688,47 +687,70 @@ function renderEvidence(stages) {
 
 function renderProfileInterpretation() {
   const stages = profileState.data.stages;
+  const retained = stages.filter(stage => !stage.history_reason);
+  const archived = stages.filter(stage => stage.history_reason);
   byId('profile-empty').hidden = Boolean(stages.length);
   byId('profile-print').disabled = !stages.length;
   byId('profile-report-tabs').hidden = !stages.length;
-  if (!stages.some(stage => stage.id === profileState.stage)) profileState.stage = stages.find(stage => stage.optimization_frozen)?.id || stages[0]?.id || '';
+  if (!stages.some(stage => stage.id === profileState.stage)) profileState.stage = retained.find(stage => stage.optimization_frozen)?.id || retained[0]?.id || stages[0]?.id || '';
   const activeIndex = Math.max(stages.findIndex(stage => stage.id === profileState.stage), 0);
   const active = stages[activeIndex];
   // Historical side experiments use their own measured control, rather than
   // crediting earlier accepted or rejected changes to the latest candidate.
-  const comparisonStages = active?.comparison_stage_ids
+  const comparisonStages = (active?.comparison_stage_ids
     ? active.comparison_stage_ids.map(id => stages.find(stage => stage.id === id)).filter(Boolean)
-    : stages.slice(0, activeIndex + 1);
-  profileStageNav.replaceChildren();
-  stages.forEach((stage, index) => {
-    const button = html('button', '', `${index + 1}. ${stage.title}`);
+    : stages.slice(0, activeIndex + 1).filter(stage => !stage.history_reason || stage.id === active?.id))
+    .filter(stage => active?.history_reason || !stage.history_reason);
+  function renderNavigation(container, entries) {
+    container.replaceChildren();
+    const focusIndex = Math.max(entries.findIndex(stage => stage.id === profileState.stage), 0);
+    entries.forEach((stage, index) => {
+      const button = html('button', '', `${index + 1}. ${stage.title}`);
+      button.type = 'button';
+      button.id = `profile-stage-tab-${stage.id}`;
+      button.setAttribute('role', 'tab');
+      button.setAttribute('aria-controls', 'profile-content');
+      button.setAttribute('aria-selected', String(stage.id === profileState.stage));
+      button.tabIndex = index === focusIndex ? 0 : -1;
+      button.addEventListener('click', () => {
+        profileState.stage = stage.id;
+        renderProfileInterpretation();
+        byId('profile-panel').scrollIntoView({ block: 'start' });
+      });
+      button.addEventListener('keydown', event => {
+        let next;
+        if (event.key === 'ArrowDown') next = (index + 1) % entries.length;
+        if (event.key === 'ArrowUp') next = (index - 1 + entries.length) % entries.length;
+        if (event.key === 'Home') next = 0;
+        if (event.key === 'End') next = entries.length - 1;
+        if (next == null) return;
+        event.preventDefault();
+        profileState.stage = entries[next].id;
+        renderProfileInterpretation();
+        document.getElementById(`profile-stage-tab-${profileState.stage}`)?.focus();
+      });
+      container.append(button);
+    });
+  }
+  renderNavigation(profileStageNav, retained);
+  profileHistoryNav.replaceChildren();
+  archived.forEach(stage => {
+    const item = html('article', 'history-report');
+    const button = html('button', '', 'View profile');
     button.type = 'button';
-    button.id = `profile-stage-tab-${stage.id}`;
-    button.setAttribute('role', 'tab');
-    button.setAttribute('aria-controls', 'profile-content');
-    button.setAttribute('aria-selected', String(stage.id === profileState.stage));
-    button.tabIndex = stage.id === profileState.stage ? 0 : -1;
+    button.setAttribute('aria-label', `View ${stage.title} profile`);
     button.addEventListener('click', () => {
       profileState.stage = stage.id;
       renderProfileInterpretation();
-      byId('profile-panel').scrollIntoView({ block: 'start' });
+      selectDashboardView('profiles');
+      byId(`profile-${profileState.report}-tab`).focus();
     });
-    button.addEventListener('keydown', event => {
-      let next;
-      if (event.key === 'ArrowDown') next = (index + 1) % stages.length;
-      if (event.key === 'ArrowUp') next = (index - 1 + stages.length) % stages.length;
-      if (event.key === 'Home') next = 0;
-      if (event.key === 'End') next = stages.length - 1;
-      if (next == null) return;
-      event.preventDefault();
-      profileState.stage = stages[next].id;
-      renderProfileInterpretation();
-      profileStageNav.querySelector('[aria-selected="true"]')?.focus();
-    });
-    profileStageNav.append(button);
+    item.append(html('strong', '', stage.title), html('p', '', stage.history_reason), button);
+    profileHistoryNav.append(item);
   });
+  byId('profile-history-summary').textContent = `Archived profile interpretations (${archived.length})`;
   updateProfileStageNav();
-  byId('profile-view-title').textContent = active ? (activeIndex === 0 ? 'Baseline profile' : `${active.title} comparison`) : 'Profile interpretation';
+  byId('profile-view-title').textContent = active ? (active.history_reason ? `History · ${active.title}` : activeIndex === 0 ? 'Baseline profile' : `${active.title} comparison`) : 'Profiling';
   byId('profile-stage-summary').textContent = active ? (activeIndex === 0 ? 'Starting measurements and optimization hypotheses' : `${comparisonStages.length} stages on each graph · ${comparisonStages[0].title} through ${active.title}`) : 'No saved stages';
   const downloads = byId('profile-downloads');
   downloads.replaceChildren();
@@ -773,6 +795,7 @@ async function refreshProfiles() {
     const response = await fetch('/api/interpretations', { cache: 'no-store' });
     if (!response.ok) throw new Error(`Profile server returned ${response.status}`);
     const data = await response.json();
+    data.stages = displayedEntries(data.stages, 'profiles');
     const signature = JSON.stringify(data);
     if (signature !== profileState.signature) {
       profileState.data = data;
@@ -781,7 +804,10 @@ async function refreshProfiles() {
     }
     byId('profile-warnings').textContent = data.warnings.join(' · ');
     byId('profile-warnings').hidden = !data.warnings.length;
-    if (!byId('profile-panel').hidden) byId('status').textContent = `Profile comparison · ${data.stages.length} stage${data.stages.length === 1 ? '' : 's'} · checks every 3s`;
+    if (!byId('profile-panel').hidden) {
+      const retained = data.stages.filter(stage => !stage.history_reason).length;
+      setLiveStatus(`Live · ${retained} profiles`, `${retained} retained · ${data.stages.length - retained} archived · checks every 3 seconds`);
+    }
   } catch (error) {
     byId('profile-warnings').textContent = `Could not load saved interpretations. Existing results are retained. ${error.message}`;
     byId('profile-warnings').hidden = false;
@@ -789,6 +815,6 @@ async function refreshProfiles() {
 }
 
 byId('profile-print').addEventListener('click', () => window.print());
-selectDashboardView(location.hash === '#profiles' ? 'profiles' : 'benchmarks');
+selectDashboardView(location.hash.slice(1));
 refreshProfiles();
 setInterval(refreshProfiles, 3000);

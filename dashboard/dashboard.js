@@ -1,5 +1,59 @@
 'use strict';
 
+// Presentation exclusions only: preserve the stored reports and application code.
+const DASHBOARD_OMISSIONS = {
+  benchmarks: ['Darwin-CPython-3.11-64bit/0006_baseline.json'],
+  profiles: ['one-s3-read']
+};
+
+function displayedEntries(entries, section) {
+  return entries.filter(entry => !DASHBOARD_OMISSIONS[section].includes(entry.id));
+}
+
+const FINAL_BENCHMARK_IDS = [1, 2, 3].map(repeat =>
+  `frozen-final-b18ff49d14ea/000${repeat}_frozen-final.json`);
+const PARSER_BENCHMARK_IDS = [2, 3, 6].map(repeat =>
+  `incremental-post-20261004-153f2b97e2c0/000${repeat}_streaming-post-after.json`);
+
+function medianOf(values) {
+  const sorted = [...values].sort((a, b) => a - b);
+  const middle = Math.floor(sorted.length / 2);
+  return sorted.length % 2 ? sorted[middle] : (sorted[middle - 1] + sorted[middle]) / 2;
+}
+
+function benchmarkStages(reports) {
+  const sources = FINAL_BENCHMARK_IDS.map(id => reports.find(report => report.id === id));
+  const supportingIds = [...FINAL_BENCHMARK_IDS, ...PARSER_BENCHMARK_IDS];
+  const result = reports.map(report => supportingIds.includes(report.id) ? {
+    ...report,
+    history_reason: FINAL_BENCHMARK_IDS.includes(report.id)
+      ? 'Supporting final repeat; included in the incremental-parser summary, not a separate optimization.'
+      : 'Earlier parser experiment; final retained parser and tuning are represented by the final summary.'
+  } : report);
+  // Never silently use a subset or combine incompatible collection settings.
+  if (sources.some(report => !report) || new Set(sources.map(report => report.group)).size !== 1) {
+    return { reports: result, warnings: ['Final parser summary requires all three final suites with matching collection settings.'] };
+  }
+  const benchmarks = {};
+  for (const name of Object.keys(sources[0].benchmarks)) {
+    const suites = sources.map(report => report.benchmarks[name]);
+    const stats = {};
+    for (const key of Object.keys(suites[0]).filter(key => key !== 'data')) {
+      const values = suites.map(suite => suite[key]);
+      if (values.every(value => typeof value === 'number' && Number.isFinite(value))) stats[key] = medianOf(values);
+    }
+    // Raw rounds remain raw; we do not claim the summary is a pooled distribution.
+    if (suites.every(suite => Array.isArray(suite.data))) stats.data = suites.flatMap(suite => suite.data);
+    benchmarks[name] = stats;
+  }
+  result.push({
+    ...sources[0], id: 'summary:incremental-post-parsing',
+    label: 'Incremental POST parsing + tuning', history_reason: null,
+    benchmarks, source_reports: sources
+  });
+  return { reports: result, warnings: [] };
+}
+
 const METRICS = [
   ['min', 'Minimum latency', 'performance', 'ms', true],
   ['max', 'Maximum latency', 'performance', 'ms', true],
@@ -39,7 +93,7 @@ function svgNode(tag, attributes = {}, text = '') {
 }
 
 function selectedReports() {
-  return state.data ? state.data.reports.filter(report => report.group === state.group) : [];
+  return state.data ? state.data.reports.filter(report => report.group === state.group && !report.history_reason) : [];
 }
 
 function selectedWorkloads() {
@@ -70,19 +124,26 @@ function showError(message) {
   byId('error').hidden = !message;
 }
 
+function setLiveStatus(text, detail = 'Checks for saved reports every 3 seconds') {
+  byId('status').textContent = text;
+  byId('status').title = detail;
+}
+
 function createControls() {
   const groupSelect = byId('group');
   const previous = state.group;
+  const groups = state.data.groups.filter(group => state.data.reports.some(report => report.group === group.id && !report.history_reason));
   groupSelect.replaceChildren();
-  state.data.groups.forEach((group, index) => {
-    const option = html('option', '', `Set ${index + 1}: ${group.label} · ${group.count} report${group.count === 1 ? '' : 's'}`);
+  groups.forEach((group, index) => {
+    const count = state.data.reports.filter(report => report.group === group.id && !report.history_reason).length;
+    const option = html('option', '', `Set ${index + 1}: ${group.label} · ${count} stage${count === 1 ? '' : 's'}`);
     option.value = group.id;
     groupSelect.append(option);
   });
-  state.group = state.data.groups.some(group => group.id === previous) ? previous : state.data.groups[0]?.id || '';
+  state.group = groups.some(group => group.id === previous) ? previous : groups[0]?.id || '';
   groupSelect.value = state.group;
-  groupSelect.disabled = state.data.groups.length < 2;
-  byId('comparison-set-control').hidden = state.data.groups.length < 2;
+  groupSelect.disabled = groups.length < 2;
+  byId('comparison-set-control').hidden = groups.length < 2;
   if (!byId('workloads').children.length) {
     Object.entries(state.data.workloads).forEach(([name, label], index) => {
       state.visible.add(name);
@@ -107,6 +168,14 @@ function renderStages(reports) {
   container.replaceChildren();
   reports.forEach((report, index) => {
     const row = html('div', 'stage-row');
+    if (report.source_reports) {
+      const provenance = html('div', 'provenance');
+      provenance.append(html('strong', '', 'Median of each statistic across 3 final suites · not pooled statistics'));
+      report.source_reports.forEach(source => provenance.append(html('div', '', source.id)));
+      row.append(html('span', 'stage-number', String(index + 1)), html('strong', '', report.label), provenance);
+      container.append(row);
+      return;
+    }
     const form = html('form', 'stage-name');
     const input = document.createElement('input');
     input.type = 'text';
@@ -145,10 +214,16 @@ function renderStages(reports) {
 function render() {
   createControls();
   const reports = selectedReports();
-  const context = reports.length === 1 ? 'Baseline only. The next completed report adds another point to every graph.' :
-    `${reports.length} saved runs. Hover a graph for exact values and changes from baseline and the previous run.`;
-  byId('context').textContent = context;
+  const archived = state.data.reports.filter(report => report.history_reason);
   renderStages(reports);
+  byId('benchmark-history-summary').textContent = `Supporting and archived benchmark reports (${archived.length})`;
+  const history = byId('archived-reports');
+  history.replaceChildren();
+  archived.forEach(report => {
+    const item = html('article', 'history-report');
+    item.append(html('strong', '', report.label), html('p', '', report.history_reason), html('code', '', report.id));
+    history.append(item);
+  });
   const warnings = [...state.data.warnings];
   if (state.data.groups.length > 1) warnings.push('Recorded environment or collection settings differ; comparison sets are kept separate.');
   if (reports.some(report => Object.values(report.benchmarks).some(stats => !Array.isArray(stats.data)))) {
@@ -289,7 +364,7 @@ function drawChart(svg, metric, sampleWorkload) {
   const y = value => bounds.bottom - value / upper * (bounds.bottom - bounds.top);
   svg.replaceChildren();
   svg.setAttribute('viewBox', `0 0 ${width} ${height}`);
-  svg.setAttribute('aria-label', `${sampleWorkload ? state.data.workloads[sampleWorkload] + ' raw timing samples' : metric.title}, across ${reports.length} saved runs. Exact values are available below.`);
+  svg.setAttribute('aria-label', `${sampleWorkload ? state.data.workloads[sampleWorkload] + ' raw timing samples' : metric.title}, across ${reports.length} stages. Exact values are available below.`);
   svg.append(svgNode('title', {}, svg.getAttribute('aria-label')));
   for (let index = 0; index <= 4; index++) {
     const value = upper * index / 4;
@@ -372,6 +447,7 @@ function drawChart(svg, metric, sampleWorkload) {
 
 function showTooltip(event, reports, index, names, metric, samples) {
   tooltip.replaceChildren(html('div', 'tip-title', reports[index].label));
+  if (reports[index].source_reports) tooltip.append(html('small', '', 'Median of 3 suite statistics · all raw rounds retained'));
   names.forEach(name => {
     const row = html('div', 'tip-row');
     row.style.setProperty('--color', `var(--series-${seriesIndex(name)})`);
@@ -423,6 +499,10 @@ async function refresh() {
     const response = await fetch('/api/reports', { cache: 'no-store' });
     if (!response.ok) throw new Error(`Report server returned ${response.status}`);
     const data = await response.json();
+    data.reports = displayedEntries(data.reports, 'benchmarks');
+    const presentation = benchmarkStages(data.reports);
+    data.reports = presentation.reports;
+    data.warnings.push(...presentation.warnings);
     const signature = JSON.stringify(data);
     const editing = byId('stages').contains(document.activeElement);
     if (signature !== state.signature && (!editing || !state.signature)) {
@@ -431,7 +511,8 @@ async function refresh() {
       render();
     }
     if (!byId('benchmark-panel').hidden) {
-      byId('status').textContent = `Live · ${data.reports.length} report${data.reports.length === 1 ? '' : 's'} · checks every 3s`;
+      const retained = data.reports.filter(report => !report.history_reason).length;
+      setLiveStatus(`Live · ${retained} stages`, `${retained} plotted · ${data.reports.length - retained} supporting/archived reports · checks every 3 seconds`);
     }
     showError('');
   } catch (error) {

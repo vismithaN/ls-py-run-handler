@@ -28,9 +28,34 @@ WORKLOADS = {
 CORE_STATS = {"min", "max", "mean", "median", "ops", "rounds", "iterations"}
 
 
+def mark_history(items, section, path, warnings):
+    """Apply explicit report IDs, never mutable labels or raw timing values."""
+    reasons = {}
+    if path is not None:
+        try:
+            reasons = json.loads(Path(path).read_text())[section]
+            if not isinstance(reasons, dict) or any(
+                not isinstance(key, str)
+                or not isinstance(reason, str)
+                or not reason.strip()
+                for key, reason in reasons.items()
+            ):
+                raise ValueError("invalid history entries")
+        except (OSError, ValueError, KeyError, TypeError) as error:
+            reasons = None
+            warnings.append(f"Dashboard history metadata is unreadable: {error}")
+    for item in items:
+        item["history_reason"] = (
+            "Retention metadata unavailable; excluded until classification is restored."
+            if reasons is None
+            else reasons.get(item["id"])
+        )
+
+
 class ReportStore:
-    def __init__(self, directory):
+    def __init__(self, directory, history_path=None):
         self.directory = Path(directory).resolve()
+        self.history_path = history_path
         self.labels_path = self.directory / ".dashboard-labels.json"
         self.cache = {}
         self.lock = RLock()
@@ -177,6 +202,7 @@ class ReportStore:
                 report["label"] = labels.get(
                     report["id"], "Baseline" if number == 1 else f"Run {number}"
                 )
+            mark_history(reports, "benchmarks", self.history_path, warnings)
             return {
                 "reports": reports,
                 "groups": list(groups.values()),
@@ -211,8 +237,9 @@ class StageName(BaseModel):
 class InterpretationStore:
     """Read curated stage files; never run profilers or rewrite source reports."""
 
-    def __init__(self, directory):
+    def __init__(self, directory, history_path=None):
         self.directory = Path(directory).resolve()
+        self.history_path = history_path
 
     @staticmethod
     def source_path(source):
@@ -315,6 +342,7 @@ class InterpretationStore:
         if len(orders) != len(set(orders)):
             warnings.append("profile interpretation stage orders must be unique")
         stages.sort(key=lambda stage: (stage["order"], stage["id"]))
+        mark_history(stages, "profiles", self.history_path, warnings)
         return {"stages": stages, "warnings": warnings}
 
     def stage(self, stage_id):
@@ -327,9 +355,10 @@ class InterpretationStore:
 def create_app(
     directory=ROOT / ".benchmarks",
     interpretations=ROOT / "reports" / "interpretations",
+    history_path=ROOT / "reports" / "dashboard-history.json",
 ):
-    store = ReportStore(directory)
-    profile_store = InterpretationStore(interpretations)
+    store = ReportStore(directory, history_path)
+    profile_store = InterpretationStore(interpretations, history_path)
     app = FastAPI(docs_url=None, redoc_url=None, openapi_url=None)
     app.add_middleware(TrustedHostMiddleware, allowed_hosts=["127.0.0.1", "localhost"])
     app.mount("/assets", StaticFiles(directory=ROOT / "dashboard"), name="assets")

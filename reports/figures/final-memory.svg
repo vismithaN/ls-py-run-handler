@@ -1,0 +1,45 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="590" viewBox="0 0 1280 590" role="img">
+<rect x="0" y="0" width="1280" height="590" fill="white"/>
+<title>Original baseline to final: tracked allocations</title>
+<desc>Whole benchmark-test Memray peaks. These values are not server RAM.</desc>
+<text x="30" y="38" font-family="Arial, sans-serif" font-size="24" fill="#17243a" font-weight="700">Original baseline to final: tracked allocations</text>
+<text x="30" y="65" font-family="Arial, sans-serif" font-size="14" fill="#56657a" font-weight="400">Whole benchmark-test Memray peaks. These values are not server RAM.</text>
+<text x="30" y="113" font-family="Arial, sans-serif" font-size="18" fill="#17243a" font-weight="700">Peak tracked allocations</text>
+<text x="30" y="135" font-family="Arial, sans-serif" font-size="13" fill="#56657a" font-weight="400">MiB</text>
+<rect x="30" y="149" width="10" height="10" fill="#94a3b8"/>
+<text x="46" y="159" font-family="Arial, sans-serif" font-size="12" fill="#17243a" font-weight="400">Original baseline</text>
+<rect x="640" y="149" width="10" height="10" fill="#00838d"/>
+<text x="656" y="159" font-family="Arial, sans-serif" font-size="12" fill="#17243a" font-weight="400">Final</text>
+<line x1="300" y1="178" x2="300" y2="490" stroke="#e1e7ef"/>
+<text x="294" y="510" font-family="Arial, sans-serif" font-size="12" fill="#56657a" font-weight="400">0</text>
+<line x1="517.5" y1="178" x2="517.5" y2="490" stroke="#e1e7ef"/>
+<text x="511.5" y="510" font-family="Arial, sans-serif" font-size="12" fill="#56657a" font-weight="400">62.5</text>
+<line x1="735" y1="178" x2="735" y2="490" stroke="#e1e7ef"/>
+<text x="729" y="510" font-family="Arial, sans-serif" font-size="12" fill="#56657a" font-weight="400">125</text>
+<line x1="952.5" y1="178" x2="952.5" y2="490" stroke="#e1e7ef"/>
+<text x="946.5" y="510" font-family="Arial, sans-serif" font-size="12" fill="#56657a" font-weight="400">187.5</text>
+<line x1="1170" y1="178" x2="1170" y2="490" stroke="#e1e7ef"/>
+<text x="1164" y="510" font-family="Arial, sans-serif" font-size="12" fill="#56657a" font-weight="400">250</text>
+<text x="30" y="189" font-family="Arial, sans-serif" font-size="14" fill="#17243a" font-weight="400">POST 500 x 10 KB</text>
+<rect x="300" y="177" width="666.076" height="17" fill="#94a3b8"/>
+<text x="973.076" y="191" font-family="Arial, sans-serif" font-size="13" fill="#17243a" font-weight="400">191.401</text>
+<rect x="300" y="201" width="350.552" height="17" fill="#00838d"/>
+<text x="657.552" y="215" font-family="Arial, sans-serif" font-size="13" fill="#17243a" font-weight="400">100.733</text>
+<text x="30" y="267" font-family="Arial, sans-serif" font-size="14" fill="#17243a" font-weight="400">POST 50 x 100 KB</text>
+<rect x="300" y="255" width="460.585" height="17" fill="#94a3b8"/>
+<text x="767.585" y="269" font-family="Arial, sans-serif" font-size="13" fill="#17243a" font-weight="400">132.352</text>
+<rect x="300" y="279" width="297.079" height="17" fill="#00838d"/>
+<text x="604.079" y="293" font-family="Arial, sans-serif" font-size="13" fill="#17243a" font-weight="400">85.367</text>
+<text x="30" y="345" font-family="Arial, sans-serif" font-size="14" fill="#17243a" font-weight="400">GET 10 KB</text>
+<rect x="300" y="333" width="50.8935" height="17" fill="#94a3b8"/>
+<text x="357.893" y="347" font-family="Arial, sans-serif" font-size="13" fill="#17243a" font-weight="400">14.625</text>
+<rect x="300" y="357" width="32.0669" height="17" fill="#00838d"/>
+<text x="339.067" y="371" font-family="Arial, sans-serif" font-size="13" fill="#17243a" font-weight="400">9.215</text>
+<text x="30" y="423" font-family="Arial, sans-serif" font-size="14" fill="#17243a" font-weight="400">GET 100 KB</text>
+<rect x="300" y="411" width="24.7981" height="17" fill="#94a3b8"/>
+<text x="331.798" y="425" font-family="Arial, sans-serif" font-size="13" fill="#17243a" font-weight="400">7.126</text>
+<rect x="300" y="435" width="8.45444" height="17" fill="#00838d"/>
+<text x="315.454" y="449" font-family="Arial, sans-serif" font-size="13" fill="#17243a" font-weight="400">2.429</text>
+<text x="30" y="537" font-family="Arial, sans-serif" font-size="12" fill="#56657a" font-weight="400">Final bars are medians of three whole-test peaks. GET includes POST seeding.</text>
+<text x="30" y="578" font-family="Arial, sans-serif" font-size="12" fill="#56657a" font-weight="400">Brown bars mark increases in lower-is-better metrics.</text>
+</svg>
