@@ -10,9 +10,9 @@
         localStorage.getItem('benchmark-dashboard-theme') === 'dark' ? 'dark' : 'light';
     } catch { /* Theme switching still works if browser storage is unavailable. */ }
   </script>
-  <link rel="stylesheet" href="/assets/styles.css?v=profile-stages-1">
+  <link rel="stylesheet" href="/assets/styles.css?v=profile-report-tabs-1">
   <script src="/assets/dashboard.js?v=profile-stages-1" defer></script>
-  <script src="/assets/profiles.js?v=profile-stages-1" defer></script>
+  <script src="/assets/profiles.js?v=remove-reporting-limitations-1" defer></script>
 </head>
 <body>
   <main>
@@ -29,8 +29,8 @@
     <div class="notice" id="error" role="alert" hidden></div>
     <div class="dashboard-layout" id="dashboard-layout">
       <aside class="dashboard-sidebar" aria-label="Dashboard navigation">
-        <button class="sidebar-toggle" id="sidebar-toggle" type="button" aria-controls="dashboard-views" aria-expanded="true" aria-label="Collapse navigation">
-          <span class="sidebar-toggle-icon" aria-hidden="true">‹</span><span class="sidebar-toggle-label">Collapse menu</span>
+        <button class="sidebar-toggle" id="sidebar-toggle" type="button" aria-controls="dashboard-views" aria-expanded="true" aria-label="Collapse navigation" title="Collapse navigation">
+          <span class="sidebar-toggle-icon" aria-hidden="true">‹</span>
         </button>
         <nav id="dashboard-views" class="dashboard-tabs" role="tablist" aria-label="Dashboard views" aria-orientation="vertical">
           <button type="button" id="benchmark-tab" role="tab" aria-controls="benchmark-panel" aria-selected="true" data-view="benchmarks">Benchmark graphs</button>
@@ -47,7 +47,7 @@
           <p class="context" id="context"></p>
           <details class="stages" open>
             <summary>Stages and report provenance</summary>
-            <div id="stages"></div>
+            <div id="stages" role="region" aria-label="Stages and report provenance" tabindex="0"></div>
           </details>
           <div class="notice" id="warnings" hidden></div>
           <section id="empty" class="empty" hidden><h2>No completed benchmark reports yet</h2><p>Run <code>make benchmark</code>; the four supplied scenarios will appear here automatically.</p></section>
@@ -63,6 +63,10 @@
               <span id="profile-downloads" class="profile-downloads"></span>
               <button id="profile-print" type="button">Print / save PDF</button>
             </div>
+          </div>
+          <div id="profile-report-tabs" class="profile-report-tabs" role="tablist" aria-label="Profile report" hidden>
+            <button id="profile-cpu-tab" type="button" role="tab" aria-controls="profile-report-cpu" aria-selected="true" data-profile-report="cpu">CPU</button>
+            <button id="profile-memory-tab" type="button" role="tab" aria-controls="profile-report-memory" aria-selected="false" tabindex="-1" data-profile-report="memory">Memory</button>
           </div>
           <div class="notice" id="profile-warnings" role="alert" hidden></div>
           <section id="profile-empty" class="empty" hidden><h2>No saved profile interpretations yet</h2><p>Add a stage file under <code>reports/interpretations/</code>. This viewer does not run profiling or generate interpretations automatically.</p></section>

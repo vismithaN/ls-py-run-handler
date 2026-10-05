@@ -266,7 +266,8 @@ removes **505/55 recursive conversion calls**. It is reasonable as a simple
 processing cleanup, not a demonstrated latency/memory optimization. The earlier
 decision to keep both is superseded by the user's approval of this recommendation.
 Keep the reports as validation history; do not count either change in the optimization
-summary or claim a latency/memory win in the submission. No dashboard point added.
+summary or claim a latency/memory win in the submission. No dashboard point was
+added at that checkpoint.
 GET 10 KB median rose 3.71% despite
 unchanged GET code; do not hide that control result or attribute small movements
 without further evidence.
@@ -281,6 +282,20 @@ Ruff/format and diff checks passed; dedicated verification database/bucket
 removed, shared test resources untouched. No new benchmark or profiler result
 is claimed for this final revision. Verification evidence:
 `measurements/simple-post-validation/retention-check-20261004T202736Z-81a658cbac88/`.
+
+**Dashboard publication — 2026-10-04:** added the control, raw-field iteration
+(reverted) and combined candidate as **experiment history, not optimizations**.
+All nine original benchmark reports are visible as labelled repeats. Each of
+the three profile entries includes cold Yappi results, original pytest-memray
+peaks/groups, crisp interpretations and 43 hash-pinned sources. The profile
+graphs compare these variants with the experiment's fresh control, not the
+original baseline or earlier rejected candidates. The combined candidate is
+explicitly **not the final response-only code** at `60dbc7d`;
+that revision has correctness verification only, not performance measurements.
+Original report bytes, previous dashboard entries and application code are
+unchanged. Prepared locally; included in the final retention checkpoint below.
+Validation: **6 dashboard tests passed**; all **129 pinned sources verified**;
+all 36 memory recordings rechecked; live benchmark and profile views confirmed.
 
 ## Correctness test results
 
@@ -1028,3 +1043,126 @@ The sequence is:
 3. Add and validate the optional measurement harness without changing the supplied benchmarks.
 4. Collect the primary baseline with `make benchmark` and `make memprofile`; collect a separate supplementary baseline with `make measure` if used.
 5. Apply one optimization, rerun correctness tests, then repeat measurements.
+
+## 2026-10-04 — Incremental POST parsing experiment
+
+**Hypothesis:** parse, validate and encode one run at a time to avoid keeping the
+whole decoded batch and all models alive together. Keep one S3 upload and the
+existing storage format. **Status: tested and retained; final decision below.**
+
+| Workload | Peak before → after (MiB) | Memory reduction vs current / original baseline | Median before → after (ms) |
+|---|---:|---:|---:|
+| POST 500 × 10 KB | 151.4 → 100.7 | 33.5% / 47.4% | 314.7 → 313.8 (effectively unchanged) |
+| POST 50 × 100 KB | 109.5 → 84.4 | 23.0% / 36.3% | 297.9 → 329.0 (+10.4%) |
+
+Three original benchmark and Memray suites per version; 10/10 correctness tests
+passed before/after and 408 offline decoder checks passed. Both POST workloads
+meet the 25%-below-original-baseline memory target, but POST 50 costs ~31 ms.
+Peaks cover the whole benchmark test, not production RSS. GET code is unchanged;
+no CPU profile was collected. No commit or revert yet; isolated test resources
+were removed and reports retained locally.
+
+Findings and raw evidence:
+`measurements/streaming-post/20261004T234931Z-153f2b97e2c0/FINDINGS.md`.
+
+### RAM verification — assumed production reference
+
+User approved assuming a production environment. Tested a **Linux/ARM64
+container, one persistent Uvicorn worker, 1 vCPU/1 GiB, no swap/reload/profiler**.
+Real HTTP and **OS-reported peak worker RSS**, excluding test-data/client memory.
+Three fresh containers per version/workload/concurrency.
+
+| POST workload | Concurrent requests | Original → candidate RAM (MiB) | Reduction vs original |
+|---|---:|---:|---:|
+| 500 × 10 KB | 1 | 193.0 → 112.5 | 41.7% |
+| 50 × 100 KB | 1 | 189.9 → 101.6 | 46.5% |
+| 500 × 10 KB | 4 | 456.7 → 204.4 | 55.2% |
+| 50 × 100 KB | 4 | 447.0 → 213.7 | 52.2% |
+
+Both workloads meet the 25% RAM target **under these assumptions**, not a
+guaranteed live-production percentage. Keep this RSS series separate from
+Memray's 47.4% / 36.3% allocation reductions and the primary latency benchmarks.
+36 fresh containers, 306 successful POSTs and 72 exact GET checks; temporary
+resources removed, reports/image retained. No application edit or commit.
+
+RAM evidence:
+`measurements/streaming-post/20261004T234931Z-153f2b97e2c0/linux-server-ram-20261005T003255Z-a799ebd03336/FINDINGS.md`.
+
+### Parser follow-up — larger chunks versus incremental decoding
+
+**Tested separately; neither applied or committed.** Original POST 50 benchmark
+median: current 256 KiB **323.1 ms**, 512 KiB **300.6 ms**, 1 MiB **293.8 ms**,
+ijson prototype **296.3 ms** (three suites/version). Larger maximum chunks did
+not help controlled small receives; with 16 KiB input fragments, preparation CPU
+was **524.4 ms current / 535.8 ms at 1 MiB / 61.7 ms incremental**.
+
+Real Linux HTTP/RSS results were mixed: no consistent latency win across traffic
+conditions, and 1 MiB raised single-request peak RAM. All candidates passed the
+ten application tests, but ijson passed only **403/421 compatibility checks** and
+rejected an accepted unsigned-64-bit input. Do not retain that prototype as-is.
+One database-connection timeout was retained separately and the block rerun.
+Working app/dependency files unchanged; isolated resources removed.
+
+Full numbers, profiling scope, repeats and failure evidence:
+`measurements/parser-options/20261005T010132Z/FINDINGS.md`.
+
+**Numeric follow-up: fixed and tested, still not adopted.** The isolated ijson
+candidate now preserves unsigned-64-bit integers and converts fractional
+`Decimal` values in-place. Both copies passed 10/10 tests, including added numeric
+round trips within the existing cases. Compatibility improved **403/421 →
+418/421**; NaN/Infinity and unpaired-surrogate differences remain. Body-level
+errors no longer invent character position zero.
+
+The CPU benefit survived: POST 50 preparation **84.9 → 57.1 ms**, or **533.4 →
+64.8 ms** with controlled 16 KiB receives. Three original POST benchmark suites
+per copy showed lower medians but high variance. A short Linux check (two fresh
+workers/workload/copy, concurrency one) showed higher RAM and mixed latency.
+**Recommendation: do not add ijson to final code as-is.** No application or
+dependency change/commit; temporary resources removed; reports retained:
+`measurements/parser-options/20261005T015417Z-numeric-fix/FINDINGS.md`.
+
+### Final decision and cleanup — 2026-10-04
+
+**Retained:** one-run-at-a-time POST parsing with the existing Python JSON
+decoder and 256 KiB maximum text chunks. No ijson dependency or chunk-size
+change in the final application. SDK reuse, storage format, transactional COPY
+and GET remain unchanged.
+
+**Trade-off accepted:** original whole-test Memray POST peaks are 47.4% / 36.3%
+below the original baseline. Separate assumed-Linux server RSS checks also
+exceed the 25% target; these are reference-environment results, not a promise
+for an unknown production deployment. POST 500 latency was effectively
+unchanged; POST 50 × 100 KB rose 10.4% (~31 ms). This is not a blanket latency
+increase across requests, and production retention depends on the latency SLO.
+
+**Follow-ups not retained:** 512 KiB / 1 MiB chunks and ijson, including its
+numeric fix. They reduced some parsing CPU/benchmark times but did not
+establish a consistent end-to-end latency win without memory/behavior costs.
+The latency trade-off is **not solved**. These prototypes were isolated;
+there was nothing to revert in the application. Their reports remain as
+rejected-experiment evidence; do not count them as retained optimizations.
+
+**Measurement reuse:** final application, correctness-test, benchmark and dependency files
+match all 14 files in the original measured after-snapshot byte-for-byte.
+All 32 pinned artifacts verified. Reuse the three original benchmark and
+Memray suites/version rather than replace them with a differently timed run.
+Separate warmed parser diagnostics remain supplemental, not latency results.
+
+**Final verification:** cold Yappi capture for all four workloads, three fresh
+processes/workload, using the existing CPU-only harness. Results:
+`measurements/20261005T035005.959459Z/`; profiles:
+`profiles/cpu/20261005T035005.959459Z/`. Correctness, resource-cleanup receipts
+and final source hashes: `measurements/retained-post-closure/`.
+Only uniquely created temporary databases/buckets are removed; shared
+test/development resources and all experiment evidence are preserved.
+
+**Closure passed:** 16 tests (10 application + 6 dashboard); 12/12 cold CPU
+captures accepted, all temporary resources removed. Lint, format, JavaScript
+syntax and diff checks pass. First-request profiled CPU medians are POST
+**0.503 / 0.434 s**, GET **0.183 / 0.184 s**; these include profiler overhead,
+not benchmark latency or a newly claimed CPU improvement.
+The first closure attempt hit the test's bucket-name safety guard; corrected
+only the temporary helper's prefix, preserved that log, then all tests passed.
+Existing dashboard CPU/Memory tabs and earlier experiment-history publications
+are checkpointed with this decision. Raw recordings remain local/ignored;
+the logbook and existing curated dashboard interpretation files are committed.
