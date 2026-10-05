@@ -206,9 +206,11 @@ a:focus-visible { outline: 2px solid var(--series-3); outline-offset: 3px; }
 .notice ul { margin: 4px 0; padding-left: 20px; }
 .chart-section { margin-top: 32px; }
 #performance-section { --section-tint: var(--performance-tint); }
-#variation-section { --section-tint: var(--variation-tint); }
 #samples-section { --section-tint: var(--samples-tint); }
-#measurement-section { --section-tint: var(--measurement-tint); }
+.chart-section > summary { font-size: 18px; }
+#benchmark-details table { font-size: 12px; }
+#benchmark-details caption { text-align: left; color: var(--muted); padding-bottom: 8px; }
+#benchmark-details th:first-child { text-align: left; }
 .chart-section > p { font-size: 13px; margin: 6px 0 14px; }
 .charts { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 410px), 1fr)); gap: 18px; }
 .chart { background-color: var(--surface); background-image: linear-gradient(180deg, var(--section-tint), var(--surface) 112px); border: 1px solid var(--line); border-radius: 12px; padding: 16px; min-width: 0; }

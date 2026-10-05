@@ -55,23 +55,21 @@ function benchmarkStages(reports) {
 }
 
 const METRICS = [
-  ['min', 'Minimum latency', 'performance', 'ms', true],
-  ['max', 'Maximum latency', 'performance', 'ms', true],
-  ['mean', 'Mean latency', 'performance', 'ms', true],
   ['median', 'Median latency', 'performance', 'ms', true],
-  ['ops', 'Operations per second', 'performance', 'POST batches/s · GET requests/s', false],
-  ['stddev', 'Standard deviation', 'variation', 'ms', true],
-  ['iqr', 'Interquartile range', 'variation', 'ms', true],
-  ['q1', 'First quartile', 'variation', 'ms', true],
-  ['q3', 'Third quartile', 'variation', 'ms', true],
-  ['ld15iqr', 'Lower whisker statistic', 'variation', 'ms', true],
-  ['hd15iqr', 'Upper whisker statistic', 'variation', 'ms', true],
-  ['rounds', 'Measurement rounds', 'measurement', 'rounds', false],
-  ['iterations', 'Iterations per round', 'measurement', 'executions/round', false],
-  ['total', 'Sum of normalized timings', 'measurement', 'ms · repetition-dependent', true],
-  ['iqr_outliers', 'IQR outliers', 'measurement', 'flagged rounds', false],
-  ['stddev_outliers', 'Standard-deviation outliers', 'measurement', 'flagged rounds', false]
+  ['mean', 'Mean latency', 'performance', 'ms', true]
 ].map(([key, title, section, unit, milliseconds]) => ({ key, title, section, unit, milliseconds }));
+
+const DETAIL_METRICS = [
+  ['ops', 'Operation rate', false],
+  ['min', 'Minimum (ms)', true],
+  ['max', 'Maximum (ms)', true],
+  ['stddev', 'Standard deviation (ms)', true],
+  ['iqr', 'IQR (ms)', true],
+  ['rounds', 'Rounds', false],
+  ['iterations', 'Iterations / round', false],
+  ['iqr_outliers', 'IQR outliers', false],
+  ['stddev_outliers', 'Std. dev. outliers', false]
+].map(([key, title, milliseconds]) => ({ key, title, milliseconds }));
 
 const state = { data: null, signature: '', group: '', visible: new Set(), charts: [], pending: false };
 const byId = id => document.getElementById(id);
@@ -268,6 +266,34 @@ function valueTable(metric, sampleWorkload = null) {
   return details;
 }
 
+function renderBenchmarkDetails() {
+  const table = html('table');
+  table.append(html('caption', '', 'Supporting statistics by stage and selected workload'));
+  const head = html('tr');
+  head.append(html('th', '', 'Stage'), html('th', '', 'Workload'));
+  DETAIL_METRICS.forEach(metric => head.append(html('th', '', metric.title)));
+  [...head.children].forEach(cell => { cell.scope = 'col'; });
+  const thead = html('thead');
+  thead.append(head);
+  const tbody = html('tbody');
+  selectedReports().forEach(report => {
+    selectedWorkloads().forEach(name => {
+      const row = html('tr');
+      const stage = html('th', '', report.label);
+      stage.scope = 'row';
+      row.append(stage, html('td', '', state.data.workloads[name]));
+      DETAIL_METRICS.forEach(metric => {
+        const value = metricValue(report, name, metric);
+        const unit = metric.key === 'ops' ? (name.includes('create') ? ' batches/s' : ' requests/s') : '';
+        row.append(html('td', '', number(value, metric.milliseconds ? 3 : 4) + (value == null ? '' : unit)));
+      });
+      tbody.append(row);
+    });
+  });
+  table.append(thead, tbody);
+  byId('benchmark-details').replaceChildren(table);
+}
+
 function downloadSvg(svg, name) {
   const panel = svg.closest('.chart');
   const clone = svg.cloneNode(true);
@@ -337,10 +363,11 @@ function renderCharts() {
   tooltip.hidden = true;
   state.charts.forEach(({ panel }) => observer.unobserve(panel));
   state.charts = [];
-  ['performance', 'variation', 'measurement', 'samples'].forEach(id => byId(id).replaceChildren());
+  ['performance', 'samples', 'benchmark-details'].forEach(id => byId(id).replaceChildren());
   const hasReports = selectedReports().length > 0;
-  ['performance', 'variation', 'measurement', 'samples'].forEach(id => { byId(`${id}-section`).hidden = !hasReports; });
+  ['performance', 'samples', 'benchmark-details'].forEach(id => { byId(`${id}-section`).hidden = !hasReports; });
   if (!hasReports) return;
+  renderBenchmarkDetails();
   METRICS.forEach(metric => byId(metric.section).append(chart(metric)));
   selectedWorkloads().forEach(name => byId('samples').append(chart({ key: 'data', unit: 'ms', milliseconds: true }, name)));
   state.charts.forEach(({ panel, redraw }) => { observer.observe(panel); redraw(); });

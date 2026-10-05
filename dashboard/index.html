@@ -10,8 +10,8 @@
         localStorage.getItem('benchmark-dashboard-theme') === 'dark' ? 'dark' : 'light';
     } catch { /* Theme switching still works if browser storage is unavailable. */ }
   </script>
-  <link rel="stylesheet" href="/assets/styles.css?v=report-navigation-1">
-  <script src="/assets/dashboard.js?v=six-benchmark-stages-1" defer></script>
+  <link rel="stylesheet" href="/assets/styles.css?v=latency-focus-1">
+  <script src="/assets/dashboard.js?v=latency-focus-1" defer></script>
   <script src="/assets/profiles.js?v=report-navigation-1" defer></script>
 </head>
 <body>
@@ -51,10 +51,17 @@
           </details>
           <div class="notice" id="warnings" hidden></div>
           <section id="empty" class="empty" hidden><h2>No completed benchmark reports yet</h2><p>Run <code>make benchmark</code>; the four supplied scenarios will appear here automatically.</p></section>
-          <section class="chart-section" id="performance-section"><h2>Latency and throughput</h2><p>Lower latency is better. Higher operation rate is better. Values describe the entire API request.</p><div class="charts" id="performance"></div></section>
-          <section class="chart-section" id="variation-section"><h2>Variation and distribution summaries</h2><p>Look for consistency alongside lower latency. Quartiles and whisker statistics describe the timing distribution, not separate workloads.</p><div class="charts" id="variation"></div></section>
-          <section class="chart-section" id="samples-section"><h2>Raw timing samples</h2><p>One point per recorded round; when iterations exceed one, each point is a round average. These are not additional independent requests.</p><div class="charts" id="samples"></div></section>
-          <section class="chart-section" id="measurement-section"><h2>Measurement context and outlier counts</h2><p>Not optimization scores. Total depends on repetitions; rounds and iterations describe collection. Outliers are statistical flags, not failed requests.</p><div class="charts" id="measurement"></div></section>
+          <section class="chart-section" id="performance-section"><h2>Latency comparison</h2><p>Lower is better. Median shows typical latency; mean includes the effect of slow rounds. Values describe the entire API request.</p><div class="charts" id="performance"></div></section>
+          <details class="chart-section" id="samples-section">
+            <summary>Raw timing samples</summary>
+            <p>One point per recorded round; when iterations exceed one, each point is a round average. These are not additional independent requests.</p>
+            <div class="charts" id="samples"></div>
+          </details>
+          <details class="chart-section" id="benchmark-details-section">
+            <summary>Supporting statistics and measurement details</summary>
+            <p>Operation rate is derived from benchmark timings, not measured concurrent capacity. Outliers are statistical flags, not failed requests. For the final summary, values are medians of three suite statistics; source suites are listed in report provenance.</p>
+            <div class="value-table-wrap" id="benchmark-details"></div>
+          </details>
         </section>
         <section id="profile-panel" role="tabpanel" aria-labelledby="profile-tab" hidden>
           <div class="controls profile-controls">
