@@ -133,7 +133,6 @@ The evaluation commands were:
 | `make memprofile` | Run those workloads with Memray to capture allocation sources and tracked peaks—not server RAM |
 | `make measure MEASURE_ARGS="--stage baseline --passes cpu"` | Capture cold Yappi CPU profiles: three fresh processes per workload, with imports/startup/request phases separated |
 | `make measure MEASURE_ARGS="--stage baseline --passes diagnostic"` | Count DB/S3 operations and new connections, and measure elapsed request phases in a separate instrumented pass |
-| `make dashboard` | View saved results and comparisons; does not run benchmarks or profilers |
 
 PostgreSQL and MinIO must be running (`make db-up`). `make test`,
 `make benchmark`, `make memprofile` and the diagnostic pass reset the dedicated
@@ -797,10 +796,13 @@ in these locations:
 | Readable, hash-pinned CPU/memory interpretations | `reports/interpretations/` |
 | Submission charts, exact plotted values and input hashes | `reports/figures/` |
 
-The dashboard exposes **Benchmark**, **Profiling** (CPU/Memory), and separate
-**Experiment history**. Reverted candidates/control repeats are not promoted
-to retained graph points. Dashboard presentation exclusions do not delete raw
-reports or change the measured application's behavior.
+The dashboard was used locally to explore **Benchmark**, **Profiling**
+(CPU/Memory), and separate **Experiment history**. Its source and dedicated
+tests are excluded from the submission; a shareable dashboard URL can accompany
+the report separately. The static figures and result interpretations remain
+available in the repository. Reverted candidates/control repeats are not
+promoted to retained graph points. Excluding the dashboard source does not
+change the measured application's behavior or the recorded results.
 
 The draft's static figures are self-contained PNG/SVG assets. Their numbers and
 repeat arrays are in [data.json](reports/figures/data.json), with the paths,
@@ -831,7 +833,6 @@ live dashboard.
   and plotted values are portable, but source hashes alone do not reconstruct
   missing recordings. Decide whether to include a compact raw-evidence bundle
   with the final submission; no claim of complete clone-only replay is made here.
-- Commit only after this draft and the pending dashboard changes are approved.
 - Prepare a clean submission branch against `main`, preserving the detailed
   experiment branch separately. The current branch contains 33 commits beyond
   local `main`, including experiments and reverts; it is the audit trail, not

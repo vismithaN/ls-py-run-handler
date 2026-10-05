@@ -1,8 +1,7 @@
-.PHONY: db-up db-down db-migrate db-downgrade db-migrate-test server format lint lint-fix test test-setup benchmark benchmark-compare benchmark-compare-save memprofile measure dashboard
+.PHONY: db-up db-down db-migrate db-downgrade db-migrate-test server format lint lint-fix test test-setup benchmark benchmark-compare benchmark-compare-save memprofile measure
 
 # Options for the optional measurement harness only
 MEASURE_ARGS ?= --stage baseline
-DASHBOARD_ARGS ?=
 
 # Start all database services defined in docker-compose-db.yaml
 db-up:
@@ -65,7 +64,3 @@ memprofile: test-setup
 # Optional supplementary measurements; resets test resources per workload/pass/session
 measure:
 	RUN_HANDLER_ENV=test poetry run python -m scripts.measure $(MEASURE_ARGS)
-
-# Local viewer only; does not reset test resources or execute benchmarks
-dashboard:
-	poetry run python -m scripts.benchmark_dashboard $(DASHBOARD_ARGS)
