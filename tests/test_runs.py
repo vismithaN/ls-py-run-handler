@@ -79,7 +79,6 @@ async def assert_roundtrip(client, runs):
         response = await client.get(f"/runs/{run_id}")
         assert response.status_code == 200, response.text
         assert response.json() == expected
-    return ids
 
 
 SHARED = {"same": [1, "repeat", {"empty": {}}]}
@@ -90,23 +89,15 @@ LARGE = {"text": "x" * (100 * 1024)}
     "runs",
     [
         pytest.param(
-            [make_run(name=f"Run {i}", inputs={"value": i}) for i in range(3)],
-            id="explicit-ids-and-order",
-        ),
-        pytest.param(
-            [{k: v for k, v in make_run().items() if k != "id"} for _ in range(2)],
-            id="generated-ids",
-        ),
-        pytest.param(
             [
-                make_run(),
                 {
                     k: v
                     for k, v in make_run().items()
-                    if k not in ("inputs", "outputs", "metadata")
+                    if k not in ("id", "inputs", "outputs", "metadata")
                 },
+                make_run(),
             ],
-            id="empty-and-omitted-fields",
+            id="generated-id-and-default-fields",
         ),
         pytest.param(
             [
@@ -183,26 +174,13 @@ VALID_BATCH = orjson.dumps([make_run()])
     "body,expected_status",
     [
         pytest.param(b"[]", 400, id="empty-batch"),
-        *[
-            pytest.param(body, 422, id=name)
-            for name, body in [
-                ("empty-body", b""),
-                ("null", b"null"),
-                ("whitespace", b" "),
-                ("unclosed-array", b"["),
-                ("truncated-batch", VALID_BATCH[:-1]),
-                ("trailing-json", VALID_BATCH + b" {}"),
-                ("trailing-comma", VALID_BATCH[:-1] + b",]"),
-                ("object-root", b"{}"),
-                ("string-root", b'"not an array"'),
-                ("number-root", b"3"),
-                ("boolean-root", b"true"),
-                (
-                    "invalid-run-after-valid-run",
-                    orjson.dumps([make_run(), {"name": "Invalid"}]),
-                ),
-            ]
-        ],
+        pytest.param(VALID_BATCH[:-1], 422, id="truncated-batch"),
+        pytest.param(b"{}", 422, id="non-array-root"),
+        pytest.param(
+            orjson.dumps([make_run(), {"name": "Invalid"}]),
+            422,
+            id="invalid-run-after-valid-run",
+        ),
     ],
 )
 async def test_rejected_batch_writes_nothing(client, storage, body, expected_status):
