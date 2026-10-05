@@ -1,7 +1,8 @@
-import uuid
 import asyncio
 import random
 import string
+import uuid
+
 import orjson
 import pytest
 import pytest_asyncio
