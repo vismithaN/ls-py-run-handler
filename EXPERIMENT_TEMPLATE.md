@@ -1166,3 +1166,158 @@ only the temporary helper's prefix, preserved that log, then all tests passed.
 Existing dashboard CPU/Memory tabs and earlier experiment-history publications
 are checkpointed with this decision. Raw recordings remain local/ignored;
 the logbook and existing curated dashboard interpretation files are committed.
+
+**Dashboard publication — 2026-10-04:** published **Incremental POST parsing
+(retained)** with all six original benchmark reports (three control, three
+retained), cold Yappi results for all four workloads, original Memray peaks and
+top-five allocation groups. All **114 pinned sources verified**; all 24 Memray
+breakdowns rechecked. Profile graphs exclude rejected candidates from the
+retained comparison series. The Memory tab includes a **separate** Linux-worker
+RSS graph/table for concurrency 1 and 4, with assumed-environment labels.
+The paired POST table explicitly shows **+10.4% latency** for POST 50; larger
+chunks and ijson remain **not retained**, with no new parser recommendation.
+No measurements rerun or original report bytes changed. Dashboard publication
+tests and JavaScript syntax checks passed; live CPU, Memory and benchmark views
+verified. Application and dependency files unchanged.
+
+### 2026-10-04 — Final focus: POST 100 KB latency and GET 10 KB memory
+
+**Status: tested candidate, uncommitted; not yet counted as retained.**
+
+POST uses the previous run's decoded-text size as a read-ahead hint only above
+256K characters, capped at 512K characters (ASCII benchmark bytes equal character
+counts; this is not a universal byte/RAM cap). Same decoder, chunk size,
+validation and storage format.
+GET uses the standard JSON decoder, preserving finite-number/64-bit behavior
+and unavailable-storage responses; orjson still encodes responses/uploads.
+
+| Original workload | Median latency before → candidate | Change | Whole-test Memray peak before → candidate |
+|---|---:|---:|---:|
+| POST 500 × 10 KB | 333.1 → 348.8 ms | +4.7% | 100.733 → 100.725 MiB |
+| POST 50 × 100 KB | 365.6 → 311.0 ms | −14.9% | 84.367 → 84.353 MiB |
+| GET 10 KB | 40.6 → 41.0 ms | +1.1% | 9.215 → 1.208 MiB (**−86.9%**) |
+| GET 100 KB | 43.1 → 41.7 ms | −3.3% | 2.408 → 2.383 MiB |
+
+Three fresh original suites/version, alternating before–after–after–before–
+before–after. POST 100 mean also fell 10.3%; timing ranges overlap. POST 500
+has a higher aggregate median and mixed paired changes; no blanket latency
+win claimed. Both POST allocation peaks remain at the retained-parser level.
+
+GET's first orjson decode had an **8 MiB tracked allocation**. Avoiding it
+explains the profiling reduction; this is **not an 87% production-RSS claim**.
+The supplied memory workflow includes fixtures, POST seeding and repeated calls.
+
+**Validation:** 10 application tests/version; 456 parser/error-location checks;
+125 GET numeric/Unicode/error comparisons; all four original benchmarks and
+24 Memray recordings; 12 accepted final cold Yappi captures. Existing benchmark
+commands and event-loop behavior unchanged. Only unique temporary resources
+were removed; all raw reports and snapshots preserved.
+
+**Discarded:** two boundary-scanner prototypes were slower in local CPU checks.
+The unrestricted-hint pilot showed POST 100 median −5.3% but POST 500 +8.3%,
+so the final candidate limits read-ahead to large runs. Pilot evidence remains
+under `measurements/streaming-post/20261005T043049Z-9b482c235139/`.
+
+Final evidence: `measurements/streaming-post/20261005T044338Z-3359d6d22ff2/`.
+Cold CPU: `measurements/20261005T044636.328099Z/` and matching `profiles/cpu/`.
+Dashboard: **POST read-ahead + GET decoder (candidate)**, with all six unchanged
+original benchmark reports, CPU/Memory results and pinned source hashes.
+
+### 2026-10-04 — GET decoder: actual server-RAM check
+
+**Decision: recommend reverting only the GET decoder. Not yet reverted or committed.**
+The POST read-ahead candidate is a separate decision and was identical in both
+RAM-test versions. The replacement does save real RAM, but only about **2 MiB
+per worker**, not the 86.9% indicated by the first-use Memray allocation peak.
+
+| GET workload | Concurrency | Warm worker peak RSS: orjson → replacement | RAM saving | Warm request median: orjson → replacement |
+|---|---:|---:|---:|---:|
+| 10 KB | 1 | 85.14 → 82.97 MiB | 2.18 MiB / 2.56% | 36.07 → 36.96 ms (+2.47%) |
+| 100 KB | 1 | 86.68 → 84.68 MiB | 2.00 MiB / 2.31% | 39.09 → 39.74 ms (+1.67%) |
+| 10 KB | 4 | 89.91 → 87.82 MiB | 2.09 MiB / 2.33% | 122.92 → 121.13 ms (−1.46%) |
+| 100 KB | 4 | 92.60 → 90.70 MiB | 1.89 MiB / 2.05% | 132.35 → 135.82 ms (+2.62%) |
+
+**Why:** the decoder's roughly 8 MiB first-use allocation is not fully resident
+RAM. Linux virtual memory was about 8 MiB lower; actual peak RSS was only about
+2 MiB lower. Fresh workers per GET size show that both sizes benefit, rather
+than the original suite attributing initialization only to GET 10 KB. The modest
+RAM benefit and small/mixed latency changes do not justify the extra numeric/
+Unicode compatibility code for this project. This is an engineering judgment,
+not a claim that the RAM saving is zero or a formal latency-significance result.
+
+**Method:** same pinned Linux/ARM64 image; one Uvicorn worker, 1 vCPU / 1 GiB /
+no swap, real HTTP, no profiler. Three fresh workers per decoder/size/concurrency
+(24 total), alternating orjson–replacement–replacement–orjson–orjson–replacement.
+Each worker served one first GET and 60 warmed GETs; all **1,464 responses** were
+fully checked. The only code difference was `decode_field()`; POST stayed identical.
+Kernel RSS/high-watermark, virtual memory and anonymous RSS were recorded before
+GET, after first GET and after warmed requests; shutdown peak cross-checked.
+Warm peaks include startup/first GET and exclude the load generator and storage.
+This assumed deployment is not a guarantee for an unknown production system.
+
+**Incomplete attempts:** the host-forwarding path caused a timeout and then an
+asyncpg connection error before GET decoding. Both incomplete attempts remain
+under `measurements/get-decoder-ram/20261005-get-rss-01/` and `...-02/`, excluded
+from the accepted comparison. The accepted run used the same direct existing
+Docker storage network for both versions. All 24 workers exited successfully;
+only each attempt's dedicated database/bucket and temporary workers were removed.
+
+Evidence: `measurements/get-decoder-ram/20261005-get-rss-03/comparison.json`.
+Dashboard: existing candidate's **Memory** tab now includes a separate actual
+Linux-worker RAM table/graph and the revert recommendation. Earlier benchmark,
+CPU and Memray reports are preserved unchanged. No application revert or commit.
+
+### 2026-10-04 — Optimization freeze and final checkpoint
+
+**Decision completed: GET decoder not retained and reverted. Optimization work frozen.**
+Restored `orjson.loads()` and removed the replacement decoder's numeric/Unicode
+compatibility helpers. Its measured ~2 MiB worker-RSS saving was real, but too
+small to justify that added code here. This is a rejected memory optimization,
+not a claim that the replacement was inherently better coding practice.
+All candidate benchmark, CPU, Memray and Linux RSS reports remain in history.
+The POST large-run read-ahead change is **kept**; S3 client reuse is **deferred**.
+
+Measured the exact frozen working tree again, with the supplied four workloads
+and timing wrapper unchanged. Final latency is the middle of three independent
+suite medians; final tracked memory is the median of three original Memray peaks.
+
+| Workload | Original → frozen median latency | Latency reduction | Original → frozen tracked peak | Peak reduction |
+|---|---:|---:|---:|---:|
+| POST 500 × 10 KB | 2,107.2 → 332.0 ms | 84.2% | 191.401 → 100.733 MiB | 47.4% |
+| POST 50 × 100 KB | 619.5 → 329.3 ms | 46.8% | 132.352 → 85.367 MiB | 35.5% |
+| GET 10 KB | 88.2 → 38.4 ms | 56.5% | 14.625 → 9.215 MiB | 37.0% |
+| GET 100 KB | 95.2 → 42.5 ms | 55.4% | 7.126 → 2.429 MiB | 65.9% |
+
+These are observed cumulative changes, not controlled causal estimates: the
+original baseline has one saved suite. **Tracked peaks are not production RAM.**
+The rejected decoder's 86.9% tracked reduction is not part of the frozen result.
+Earlier Linux RSS experiments retain their own source hashes and assumptions;
+no new server-RAM result is claimed for this exact final combination.
+
+**Verification:** 17 tests passed (10 application, 7 dashboard), three original
+benchmark suites, three original Memray suites, and 12 accepted cold Yappi
+captures (three fresh processes per workload). All 12 Memray group totals match
+their recorded peaks. Source snapshots match the frozen application; original
+benchmark and dependency lock unchanged. Only dedicated temporary resources
+were removed, with successful cleanup receipts. The initial closure helper
+omitted dashboard report fixtures from its snapshot; preserved that failed log,
+corrected the helper's test working directory, then all tests passed. No product
+code change was needed for that collection issue.
+
+Evidence: `measurements/frozen-final/20261005T055429Z-b18ff49d14ea/`.
+CPU: `measurements/20261005T055651.447971Z/` and matching `profiles/cpu/`.
+Application SHA-256: `25468b27b815007df25c43400a609e2e50724f36a90f46d746cc2fa6634b7138`.
+Dashboard: **Frozen final · GET decoder reverted**, with CPU/Memory tabs,
+baseline-to-final graphs/table and **71 pinned sources**. Three unchanged raw
+final benchmark JSONs are also published; older candidate labels explicitly
+say the GET decoder was not retained.
+
+**Next, without further optimization:** finalize the report, review/fine-tune
+the code with approval, understand each retained change, and prepare the final
+presentation. No commit or push performed for this freeze; awaiting approval.
+
+**Repository checkpoint — 2026-10-04:** user approved committing and pushing
+all pending code, tests, dashboard and curated interpretation/logbook changes
+on `codex/baseline-correctness-tests`. Original raw benchmark and profiler
+recordings remain local in their existing ignored folders; source hashes and
+the displayed results are preserved in the curated reports.

@@ -377,6 +377,110 @@ def test_post_cleanup_history_distinguishes_measured_and_final_variants(
     assert stages[-1]["comparison_results"][0]["before_variant"] == "fields"
 
 
+def test_retained_post_parser_keeps_allocation_and_server_ram_separate(
+    tmp_path, monkeypatch
+):
+    source = ROOT / "reports/interpretations/incremental-post-parsing.json"
+    (tmp_path / source.name).write_bytes(source.read_bytes())
+    store = InterpretationStore(tmp_path)
+    monkeypatch.setattr(store, "source_status", lambda source: "verified")
+    snapshot = store.snapshot()
+    assert not snapshot["warnings"]
+    stage = snapshot["stages"][0]
+    assert stage["retention_decision"] == "retained"
+    assert stage["parser_followup_complete"] is True
+    assert stage["commit"].startswith("0d41d76")
+    assert stage["source_verification"]["verified"] == 114
+    assert stage["comparison_stage_ids"][-1] == stage["id"]
+    assert "post-json-parsing" not in stage["comparison_stage_ids"]
+    assert len(stage["cpu"]["phase_medians"]) == 4
+    for item in stage["cpu"]["workloads"][:2]:
+        assert item["functions"][0]["label"] == "Batch search"
+        assert item["functions"][0]["calls"] == 0
+    for item in stage["memory"]["workloads"]:
+        assert len(item["peak_repeats_mib"]) == len(item["source_ids"]) == 3
+        assert math.isclose(
+            sum(row["mib"] for row in item["allocations"]), item["peak_mib"]
+        )
+    assert math.isclose(stage["memory"]["workloads"][0]["peak_mib"], 100.72517967224121)
+    assert math.isclose(stage["memory"]["workloads"][1]["peak_mib"], 84.35297298431396)
+    ram = stage["server_memory"]
+    assert ram["metric"] == "OS lifetime peak worker RSS"
+    assert len(ram["workloads"]) == 4
+    for item in ram["workloads"]:
+        assert item["concurrency"] in (1, 4)
+        assert item["reduction_vs_original_pct"] > 25
+        for variant in ("original", "before", "after"):
+            assert len(item[variant]["repeats_mib"]) == 3
+        assert item["after"]["peak_mib"] < item["before"]["peak_mib"]
+    row = stage["comparison_results"][1]
+    assert math.isclose(
+        (row["after_median_ms"] / row["before_median_ms"] - 1) * 100, 10.443290560487672
+    )
+    assert sum(key.startswith("benchmark-") for key in stage["sources"]) == 6
+
+    candidate = ROOT / "reports/interpretations/post-get-focus.json"
+    (tmp_path / candidate.name).write_bytes(candidate.read_bytes())
+    snapshot = store.snapshot()
+    assert not snapshot["warnings"]
+    stage = snapshot["stages"][-1]
+    assert stage["retention_decision"] == "partially-retained"
+    assert stage["count_as_optimization"] is False
+    assert stage["component_decisions"]["get_decoder"] == (
+        "not retained; reverted"
+    )
+    ram = stage["server_memory"]
+    assert ram["mode"] == "get-decoder"
+    assert len(ram["workloads"]) == 4
+    assert ram["source_id"] in stage["sources"]
+    for item in ram["workloads"]:
+        for version in ("before", "after"):
+            assert len(item[version]["first_peak_repeats_mib"]) == 3
+            assert len(item[version]["warm_peak_repeats_mib"]) == 3
+            assert len(item[version]["warm_latency_repeats_ms"]) == 3
+        assert math.isclose(
+            item["before"]["warm_peak_mib"] - item["after"]["warm_peak_mib"],
+            item["warm_saving_mib"],
+        )
+        assert 1 < item["warm_reduction_pct"] < 3
+    assert all(
+        source_id.startswith("get-ram-")
+        for source_id in (stage["metric_sources"][-1]["source_ids"])
+    )
+
+    frozen = ROOT / "reports/interpretations/frozen-final.json"
+    (tmp_path / frozen.name).write_bytes(frozen.read_bytes())
+    snapshot = store.snapshot()
+    assert not snapshot["warnings"]
+    stage = snapshot["stages"][-1]
+    assert stage["optimization_frozen"] is True
+    assert stage["count_as_optimization"] is False
+    assert stage["component_decisions"] == {
+        "get_decoder": "orjson restored; replacement not retained",
+        "post_read_ahead": "kept",
+        "s3_client_reuse": "deferred",
+    }
+    assert stage["comparison_stage_ids"] == ["baseline", "frozen-final"]
+    assert stage["source_verification"]["verified"] == 71
+    assert len(stage["cpu"]["phase_medians"]) == 4
+    assert len(stage["comparison_results"]) == 4
+    assert "server_memory" not in stage  # Historical RSS is not a new final capture.
+    for item in stage["cpu"]["workloads"][2:]:
+        functions = {row["label"]: row for row in item["functions"]}
+        assert functions["S3 range read"]["calls"] == 1
+        assert functions["JSON decode"]["calls"] == 3
+    for item in stage["memory"]["workloads"]:
+        assert len(item["peak_repeats_mib"]) == len(item["source_ids"]) == 3
+        assert item["source_id"] in item["source_ids"]
+        assert math.isclose(
+            sum(row["mib"] for row in item["allocations"]), item["peak_mib"]
+        )
+    for row in stage["comparison_results"]:
+        assert len(row["before_benchmark_medians_ms"]) == 1
+        assert len(row["after_benchmark_medians_ms"]) == 3
+    assert math.isclose(stage["memory"]["workloads"][2]["peak_mib"], 9.214622497558594)
+
+
 def test_dashboard_serves_assets_and_persists_only_valid_same_origin_labels(
     tmp_path, monkeypatch
 ):

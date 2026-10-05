@@ -1,0 +1,1087 @@
+{
+  "schema_version": 1,
+  "id": "frozen-final",
+  "order": 14,
+  "title": "Frozen final · GET decoder reverted",
+  "commit": "0d41d76880e054002e7c2ecac38b3fb51787907f",
+  "application_sha256": "25468b27b815007df25c43400a609e2e50724f36a90f46d746cc2fa6634b7138",
+  "dirty_worktree": true,
+  "optimization_frozen": true,
+  "retention_decision": "frozen",
+  "count_as_optimization": false,
+  "parser_followup_complete": true,
+  "component_decisions": {
+    "get_decoder": "orjson restored; replacement not retained",
+    "post_read_ahead": "kept",
+    "s3_client_reuse": "deferred"
+  },
+  "decision_summary": "Optimization work frozen. POST read-ahead kept; GET decoder reverted. S3 client reuse deferred. Next: finalize reports, review and explain the code.",
+  "review_status": "Frozen and verified · source-pinned measured working tree · reports preserved",
+  "summary": "Final original-workload results; GET restored to orjson. No 87% production-RAM claim. All optimizations frozen.",
+  "comparison_stage_ids": [
+    "baseline",
+    "frozen-final"
+  ],
+  "show_comparison_results": true,
+  "comparison_title": "Original baseline → frozen code",
+  "comparison_focus_ids": [
+    "post-500-10kb",
+    "post-50-100kb",
+    "get-10kb",
+    "get-100kb"
+  ],
+  "comparison_results_scope": "Baseline: original saved suite. Final latency: middle of 3 suite medians. Final Memray: median of 3 whole-test peaks, not server RAM.",
+  "comparison_results": [
+    {
+      "id": "post-500-10kb",
+      "label": "POST 500 × 10 KB",
+      "before_median_ms": 2107.1943749998354,
+      "after_median_ms": 332.0187499921303,
+      "before_peak_mib": 191.40101718902588,
+      "after_peak_mib": 100.73324203491211,
+      "before_benchmark_medians_ms": [
+        2107.1943749998354
+      ],
+      "after_benchmark_medians_ms": [
+        322.8244589990936,
+        332.0187499921303,
+        355.82933301338926
+      ],
+      "after_peak_repeats_mib": [
+        100.72536849975586,
+        100.73335647583008,
+        100.73324203491211
+      ],
+      "latency_reduction_pct": 84.24356319800084,
+      "memory_reduction_pct": 47.370581664449105
+    },
+    {
+      "id": "post-50-100kb",
+      "label": "POST 50 × 100 KB",
+      "before_median_ms": 619.5012499997574,
+      "after_median_ms": 329.28512498619966,
+      "before_peak_mib": 132.3521022796631,
+      "after_peak_mib": 85.36749935150146,
+      "before_benchmark_medians_ms": [
+        619.5012499997574
+      ],
+      "after_benchmark_medians_ms": [
+        301.8811669899151,
+        331.471874989802,
+        329.28512498619966
+      ],
+      "after_peak_repeats_mib": [
+        85.35297298431396,
+        85.36749935150146,
+        85.36749935150146
+      ],
+      "latency_reduction_pct": 46.84673759958861,
+      "memory_reduction_pct": 35.49970277682636
+    },
+    {
+      "id": "get-10kb",
+      "label": "GET 10 KB",
+      "before_median_ms": 88.15822899987324,
+      "after_median_ms": 38.35643750790041,
+      "before_peak_mib": 14.624557495117188,
+      "after_peak_mib": 9.214622497558594,
+      "before_benchmark_medians_ms": [
+        88.15822899987324
+      ],
+      "after_benchmark_medians_ms": [
+        38.35643750790041,
+        41.31254198728129,
+        37.318478993256576
+      ],
+      "after_peak_repeats_mib": [
+        9.214622497558594,
+        9.221558570861816,
+        9.205349922180176
+      ],
+      "latency_reduction_pct": 56.49137018399546,
+      "memory_reduction_pct": 36.992127791660366
+    },
+    {
+      "id": "get-100kb",
+      "label": "GET 100 KB",
+      "before_median_ms": 95.23764600021423,
+      "after_median_ms": 42.516145505942404,
+      "before_peak_mib": 7.125877380371094,
+      "after_peak_mib": 2.429436683654785,
+      "before_benchmark_medians_ms": [
+        95.23764600021423
+      ],
+      "after_benchmark_medians_ms": [
+        39.22333300579339,
+        42.516145505942404,
+        43.15658350242302
+      ],
+      "after_peak_repeats_mib": [
+        2.429436683654785,
+        2.429436683654785,
+        2.429436683654785
+      ],
+      "latency_reduction_pct": 55.35783664177634,
+      "memory_reduction_pct": 65.90684130564891
+    }
+  ],
+  "cpu": {
+    "profiler": "Yappi 1.7.6 · CPU clock · built-ins enabled",
+    "condition": "Cold start",
+    "procedure": "3 fresh processes/workload; 1 request; 0 warm-ups. Function rows: session 1.",
+    "scope": "Application imports, startup and first request captured separately. GET seeded outside capture.",
+    "reading_guide": "Phase medians of three; function rows cover all phases and inclusive CPU overlaps.",
+    "limitation": "Profiled CPU is not unprofiled latency. Startup/import variability is not an optimization gain.",
+    "phase_medians": [
+      {
+        "id": "post-500-10kb",
+        "label": "POST 500 × 10 KB",
+        "total_s": 4.105257,
+        "imports_s": 3.380665,
+        "startup_s": 0.238419,
+        "first_request_s": 0.485435
+      },
+      {
+        "id": "post-50-100kb",
+        "label": "POST 50 × 100 KB",
+        "total_s": 3.967357,
+        "imports_s": 3.334975,
+        "startup_s": 0.237537,
+        "first_request_s": 0.393141
+      },
+      {
+        "id": "get-10kb",
+        "label": "GET 10 KB",
+        "total_s": 3.781499,
+        "imports_s": 3.33965,
+        "startup_s": 0.243405,
+        "first_request_s": 0.183929
+      },
+      {
+        "id": "get-100kb",
+        "label": "GET 100 KB",
+        "total_s": 3.768717,
+        "imports_s": 3.34977,
+        "startup_s": 0.240101,
+        "first_request_s": 0.180862
+      }
+    ],
+    "workloads": [
+      {
+        "id": "post-500-10kb",
+        "label": "POST 500 × 10 KB",
+        "source_id": "cpu-post-500-10kb-s1",
+        "functions": [
+          {
+            "label": "Batch search",
+            "function": "bytes.find",
+            "calls": 0,
+            "self_s": 0,
+            "inclusive_s": 0
+          },
+          {
+            "label": "S3 client dependency",
+            "function": "get_s3_client",
+            "calls": 1,
+            "self_s": 1.3e-05,
+            "inclusive_s": 0.031941
+          },
+          {
+            "label": "POST preparation",
+            "function": "prepare_runs",
+            "calls": 1,
+            "self_s": 0.026007,
+            "inclusive_s": 0.137159
+          },
+          {
+            "label": "Raw JSON decoding (all phases)",
+            "function": "JSONDecoder.raw_decode",
+            "calls": 572,
+            "self_s": 0.061449,
+            "inclusive_s": 0.062582
+          },
+          {
+            "label": "Incomplete decode exceptions",
+            "function": "JSONDecodeError.__init__",
+            "calls": 65,
+            "self_s": 0.000237,
+            "inclusive_s": 0.001133
+          },
+          {
+            "label": "Bulk COPY",
+            "function": "Connection.copy_records_to_table",
+            "calls": 1,
+            "self_s": 0.0013139999999999998,
+            "inclusive_s": 0.00456
+          }
+        ]
+      },
+      {
+        "id": "post-50-100kb",
+        "label": "POST 50 × 100 KB",
+        "source_id": "cpu-post-50-100kb-s1",
+        "functions": [
+          {
+            "label": "Batch search",
+            "function": "bytes.find",
+            "calls": 0,
+            "self_s": 0,
+            "inclusive_s": 0
+          },
+          {
+            "label": "S3 client dependency",
+            "function": "get_s3_client",
+            "calls": 1,
+            "self_s": 1.3e-05,
+            "inclusive_s": 0.032781
+          },
+          {
+            "label": "POST preparation",
+            "function": "prepare_runs",
+            "calls": 1,
+            "self_s": 0.003875,
+            "inclusive_s": 0.070933
+          },
+          {
+            "label": "Raw JSON decoding (all phases)",
+            "function": "JSONDecoder.raw_decode",
+            "calls": 58,
+            "self_s": 0.059475,
+            "inclusive_s": 0.059669999999999994
+          },
+          {
+            "label": "Incomplete decode exceptions",
+            "function": "JSONDecodeError.__init__",
+            "calls": 1,
+            "self_s": 6e-06,
+            "inclusive_s": 0.000195
+          },
+          {
+            "label": "Bulk COPY",
+            "function": "Connection.copy_records_to_table",
+            "calls": 1,
+            "self_s": 0.000192,
+            "inclusive_s": 0.0008049999999999999
+          }
+        ]
+      },
+      {
+        "id": "get-10kb",
+        "label": "GET 10 KB",
+        "source_id": "cpu-get-10kb-s1",
+        "functions": [
+          {
+            "label": "S3 client dependency",
+            "function": "get_s3_client",
+            "calls": 1,
+            "self_s": 1.8999999999999998e-05,
+            "inclusive_s": 0.032158
+          },
+          {
+            "label": "S3 range read",
+            "function": "fetch_range",
+            "calls": 1,
+            "self_s": 2.9999999999999997e-05,
+            "inclusive_s": 0.026345999999999998
+          },
+          {
+            "label": "JSON decode",
+            "function": "loads",
+            "calls": 3,
+            "self_s": 5.4e-05,
+            "inclusive_s": 5.4e-05
+          },
+          {
+            "label": "GET route",
+            "function": "get_run",
+            "calls": 1,
+            "self_s": 5.1e-05,
+            "inclusive_s": 0.026839
+          }
+        ]
+      },
+      {
+        "id": "get-100kb",
+        "label": "GET 100 KB",
+        "source_id": "cpu-get-100kb-s1",
+        "functions": [
+          {
+            "label": "S3 client dependency",
+            "function": "get_s3_client",
+            "calls": 1,
+            "self_s": 1.1e-05,
+            "inclusive_s": 0.031962
+          },
+          {
+            "label": "S3 range read",
+            "function": "fetch_range",
+            "calls": 1,
+            "self_s": 3.2e-05,
+            "inclusive_s": 0.025391
+          },
+          {
+            "label": "JSON decode",
+            "function": "loads",
+            "calls": 3,
+            "self_s": 0.00035,
+            "inclusive_s": 0.00035
+          },
+          {
+            "label": "GET route",
+            "function": "get_run",
+            "calls": 1,
+            "self_s": 5.3e-05,
+            "inclusive_s": 0.026255999999999998
+          }
+        ]
+      }
+    ]
+  },
+  "memory": {
+    "profiler": "Original pytest-memray / Memray 1.17.2",
+    "scope": "Whole benchmark-test tracked peak; includes generated payloads, repeated execution and GET seeding. Not production RAM.",
+    "reading_guide": "Median of three peaks; groups from the actual median-peak recording.",
+    "limitation": "First-use allocation and test order affect peaks. No new RSS capture on this exact frozen code.",
+    "grouping": {
+      "version": "python-stack-v1",
+      "extension": "prepare_runs normalization and incremental parser attribution; measured sources pinned"
+    },
+    "workloads": [
+      {
+        "id": "post-500-10kb",
+        "label": "POST 500 × 10 KB",
+        "source_id": "memory-post-500-10kb-r3",
+        "peak_mib": 100.73324203491211,
+        "allocations": [
+          {
+            "label": "Benchmark-generated test data",
+            "mib": 38.680498123168945
+          },
+          {
+            "label": "Unattributed (no Python stack)",
+            "mib": 32.026108741760254
+          },
+          {
+            "label": "Batch buffer",
+            "mib": 18.300540924072266
+          },
+          {
+            "label": "S3 SDK / data",
+            "mib": 11.14346694946289
+          },
+          {
+            "label": "POST references / bookkeeping",
+            "mib": 0.47498130798339844
+          },
+          {
+            "label": "Other framework / client / runtime",
+            "mib": 0.1065206527709961
+          },
+          {
+            "label": "Benchmark request serialization / bookkeeping",
+            "mib": 0.0006160736083984375
+          },
+          {
+            "label": "HTTP response encoding",
+            "mib": 0.0005092620849609375
+          }
+        ],
+        "peak_repeats_mib": [
+          100.72536849975586,
+          100.73335647583008,
+          100.73324203491211
+        ],
+        "source_ids": [
+          "memory-post-500-10kb-r1",
+          "memory-post-500-10kb-r2",
+          "memory-post-500-10kb-r3"
+        ]
+      },
+      {
+        "id": "post-50-100kb",
+        "label": "POST 50 × 100 KB",
+        "source_id": "memory-post-50-100kb-r2",
+        "peak_mib": 85.36749935150146,
+        "allocations": [
+          {
+            "label": "Benchmark-generated test data",
+            "mib": 33.714752197265625
+          },
+          {
+            "label": "Unattributed (no Python stack)",
+            "mib": 32.01673984527588
+          },
+          {
+            "label": "Batch buffer",
+            "mib": 16.549619674682617
+          },
+          {
+            "label": "S3 SDK / data",
+            "mib": 2.068368911743164
+          },
+          {
+            "label": "Decoded request JSON",
+            "mib": 1.0
+          },
+          {
+            "label": "Other framework / client / runtime",
+            "mib": 0.018018722534179688
+          }
+        ],
+        "peak_repeats_mib": [
+          85.35297298431396,
+          85.36749935150146,
+          85.36749935150146
+        ],
+        "source_ids": [
+          "memory-post-50-100kb-r1",
+          "memory-post-50-100kb-r2",
+          "memory-post-50-100kb-r3"
+        ]
+      },
+      {
+        "id": "get-10kb",
+        "label": "GET 10 KB",
+        "source_id": "memory-get-10kb-r1",
+        "peak_mib": 9.214622497558594,
+        "allocations": [
+          {
+            "label": "Decode retrieved field JSON",
+            "mib": 8.0
+          },
+          {
+            "label": "S3 SDK / data",
+            "mib": 0.8401613235473633
+          },
+          {
+            "label": "Other framework / client / runtime",
+            "mib": 0.2845125198364258
+          },
+          {
+            "label": "Unattributed (no Python stack)",
+            "mib": 0.07960224151611328
+          },
+          {
+            "label": "Benchmark-generated test data",
+            "mib": 0.00933837890625
+          },
+          {
+            "label": "POST references / bookkeeping",
+            "mib": 0.0010080337524414062
+          }
+        ],
+        "peak_repeats_mib": [
+          9.214622497558594,
+          9.221558570861816,
+          9.205349922180176
+        ],
+        "source_ids": [
+          "memory-get-10kb-r1",
+          "memory-get-10kb-r2",
+          "memory-get-10kb-r3"
+        ]
+      },
+      {
+        "id": "get-100kb",
+        "label": "GET 100 KB",
+        "source_id": "memory-get-100kb-r2",
+        "peak_mib": 2.429436683654785,
+        "allocations": [
+          {
+            "label": "Other framework / client / runtime",
+            "mib": 0.8811759948730469
+          },
+          {
+            "label": "S3 SDK / data",
+            "mib": 0.8503179550170898
+          },
+          {
+            "label": "Unattributed (no Python stack)",
+            "mib": 0.5171022415161133
+          },
+          {
+            "label": "Decode retrieved field JSON",
+            "mib": 0.10553741455078125
+          },
+          {
+            "label": "Benchmark-generated test data",
+            "mib": 0.0742950439453125
+          },
+          {
+            "label": "POST references / bookkeeping",
+            "mib": 0.0010080337524414062
+          }
+        ],
+        "peak_repeats_mib": [
+          2.429436683654785,
+          2.429436683654785,
+          2.429436683654785
+        ],
+        "source_ids": [
+          "memory-get-100kb-r1",
+          "memory-get-100kb-r2",
+          "memory-get-100kb-r3"
+        ]
+      }
+    ]
+  },
+  "finding_mode": "results",
+  "findings": [
+    {
+      "title": "Frozen code",
+      "status": "Frozen",
+      "evidence": "POST memory: 47.4% / 35.5% lower than original whole-test peaks",
+      "interpretation": "Measured exact final code, not the rejected GET candidate. Latency and tracked memory shown for all four workloads.",
+      "optimization": "POST incremental parsing + bounded large-run read-ahead; orjson GET restored",
+      "validation": "17 tests; 3 benchmark suites; 3 Memray suites; 12 cold CPU captures"
+    },
+    {
+      "title": "GET decoder",
+      "status": "Not retained",
+      "evidence": "Historical Linux A/B: 1.89–2.18 MiB RSS saved per worker (2.05–2.56%)",
+      "interpretation": "Real but modest RAM saving did not justify extra numeric/Unicode compatibility code. Reverted; earlier experiment and RSS reports preserved in history.",
+      "optimization": "Replacement GET decoder removed",
+      "validation": "Historical stage 14; not a fresh RSS claim on this frozen code"
+    },
+    {
+      "title": "Remaining work",
+      "status": "Deferred",
+      "evidence": "S3 client reuse: not implemented or measured",
+      "interpretation": "No more optimization experiments for now. Final reporting, code review and preparation remain separate tasks.",
+      "optimization": "Optimization freeze",
+      "validation": "Session caching still present; request-scoped S3 clients unchanged"
+    }
+  ],
+  "limitations": [
+    "Original baseline has one saved benchmark suite; final has three. These observed reductions are not controlled causal estimates or guarantees.",
+    "Memray is whole-test tracked allocation, not production RAM. Prior Linux RSS experiments remain historical, with separate code hashes and assumed deployment conditions.",
+    "No new server-RAM measurement on this exact frozen combination. Do not carry the rejected decoder's 86.9% allocation reduction into final claims.",
+    "CPU profiles include profiler overhead; inclusive functions overlap. Phase medians need not sum exactly.",
+    "Measurements captured an uncommitted working tree identified by its application SHA-256. The commit field records HEAD at measurement time, not the later checkpoint commit."
+  ],
+  "metric_sources": [
+    {
+      "metric": "Cold CPU",
+      "source_ids": [
+        "cpu-post-500-10kb-s1-result",
+        "cpu-post-500-10kb-s1-cleanup",
+        "cpu-post-500-10kb-s1-pstat",
+        "cpu-post-500-10kb-s2-result",
+        "cpu-post-500-10kb-s2-cleanup",
+        "cpu-post-500-10kb-s2-pstat",
+        "cpu-post-500-10kb-s3-result",
+        "cpu-post-500-10kb-s3-cleanup",
+        "cpu-post-500-10kb-s3-pstat",
+        "cpu-post-500-10kb-s1",
+        "cpu-post-50-100kb-s1-result",
+        "cpu-post-50-100kb-s1-cleanup",
+        "cpu-post-50-100kb-s1-pstat",
+        "cpu-post-50-100kb-s2-result",
+        "cpu-post-50-100kb-s2-cleanup",
+        "cpu-post-50-100kb-s2-pstat",
+        "cpu-post-50-100kb-s3-result",
+        "cpu-post-50-100kb-s3-cleanup",
+        "cpu-post-50-100kb-s3-pstat",
+        "cpu-post-50-100kb-s1",
+        "cpu-get-10kb-s1-result",
+        "cpu-get-10kb-s1-cleanup",
+        "cpu-get-10kb-s1-pstat",
+        "cpu-get-10kb-s2-result",
+        "cpu-get-10kb-s2-cleanup",
+        "cpu-get-10kb-s2-pstat",
+        "cpu-get-10kb-s3-result",
+        "cpu-get-10kb-s3-cleanup",
+        "cpu-get-10kb-s3-pstat",
+        "cpu-get-10kb-s1",
+        "cpu-get-100kb-s1-result",
+        "cpu-get-100kb-s1-cleanup",
+        "cpu-get-100kb-s1-pstat",
+        "cpu-get-100kb-s2-result",
+        "cpu-get-100kb-s2-cleanup",
+        "cpu-get-100kb-s2-pstat",
+        "cpu-get-100kb-s3-result",
+        "cpu-get-100kb-s3-cleanup",
+        "cpu-get-100kb-s3-pstat",
+        "cpu-get-100kb-s1",
+        "cold-cpu-summary"
+      ],
+      "rule": "3 fresh processes/workload; phase medians; session-1 functions; successful resource cleanup."
+    },
+    {
+      "metric": "Whole-test Memray",
+      "source_ids": [
+        "memory-baseline-post-500-10kb",
+        "memory-post-500-10kb-r1",
+        "memory-post-500-10kb-r2",
+        "memory-post-500-10kb-r3",
+        "memory-baseline-post-50-100kb",
+        "memory-post-50-100kb-r1",
+        "memory-post-50-100kb-r2",
+        "memory-post-50-100kb-r3",
+        "memory-baseline-get-10kb",
+        "memory-get-10kb-r1",
+        "memory-get-10kb-r2",
+        "memory-get-10kb-r3",
+        "memory-baseline-get-100kb",
+        "memory-get-100kb-r1",
+        "memory-get-100kb-r2",
+        "memory-get-100kb-r3",
+        "base-classifier",
+        "grouping-publication"
+      ],
+      "rule": "Original baseline recording versus median of 3 final tracked peaks; groups from actual median recording; each group sum equals the peak."
+    },
+    {
+      "metric": "Original benchmark",
+      "source_ids": [
+        "benchmark-baseline",
+        "benchmark-final-r1",
+        "benchmark-final-r2",
+        "benchmark-final-r3"
+      ],
+      "rule": "Original single baseline suite versus median of 3 final suite medians; no scenario or timing wrapper changes."
+    },
+    {
+      "metric": "Frozen state and correctness",
+      "source_ids": [
+        "experiment",
+        "commands",
+        "cleanup",
+        "final-verification",
+        "correctness",
+        "measured-route",
+        "measured-parser",
+        "original-workloads"
+      ],
+      "rule": "Source snapshot matches current app; all collection commands passed; only unique temporary resources cleaned."
+    }
+  ],
+  "sources": {
+    "benchmark-baseline": {
+      "path": "measurements/frozen-final/20261005T055429Z-b18ff49d14ea/baseline-benchmark.json",
+      "label": "Unchanged original saved baseline benchmark",
+      "sha256": "f7d61547d2e2cd9c31d9f32920f6706e16dafc556c424650c654d4e44520b161",
+      "size_bytes": 7886
+    },
+    "benchmark-final-r1": {
+      "path": "measurements/frozen-final/20261005T055429Z-b18ff49d14ea/benchmark-reports/Darwin-CPython-3.11-64bit/0001_frozen-final.json",
+      "label": "Original frozen-code benchmark · repeat 1",
+      "sha256": "d3ee9e461337fb5a4c1e2b764a87a5d8fa7667c83f88719d597433cc6addcee1",
+      "size_bytes": 9001
+    },
+    "benchmark-final-r2": {
+      "path": "measurements/frozen-final/20261005T055429Z-b18ff49d14ea/benchmark-reports/Darwin-CPython-3.11-64bit/0002_frozen-final.json",
+      "label": "Original frozen-code benchmark · repeat 2",
+      "sha256": "297b51cb85c899feeaed9fa019f3519e25c5dec6ba06abfc8e186846865e9057",
+      "size_bytes": 9123
+    },
+    "benchmark-final-r3": {
+      "path": "measurements/frozen-final/20261005T055429Z-b18ff49d14ea/benchmark-reports/Darwin-CPython-3.11-64bit/0003_frozen-final.json",
+      "label": "Original frozen-code benchmark · repeat 3",
+      "sha256": "0d6a6e8c703255585412af4384290e2ad0ae001c194276df5303c46a0800d479",
+      "size_bytes": 8843
+    },
+    "memory-baseline-post-500-10kb": {
+      "path": "measurements/baseline-bdf1239-gxSv1A8k/original-memory/baseline-tests-benchmarks-test_run_performance.py-test_create_batch_runs_500_10kb.bin",
+      "label": "POST 500 × 10 KB original baseline Memray",
+      "sha256": "ea7626a9db18ae24299ace569c6eeadd3d757967db2660b53fc9cead5657ea96",
+      "size_bytes": 70076
+    },
+    "memory-post-500-10kb-r1": {
+      "path": "profiles/memory/20261005T055429Z-b18ff49d14ea-frozen-final-1/d113ae369e35413db43df9629bdf4cfe-tests-benchmarks-test_run_performance.py-test_create_batch_runs_500_10kb.bin",
+      "label": "POST 500 × 10 KB Memray · repeat 1",
+      "sha256": "073d4c70195a4035504fc5b3f45bcf479e2f031a65efe88895e2e237db51927a",
+      "size_bytes": 52950
+    },
+    "memory-post-500-10kb-r2": {
+      "path": "profiles/memory/20261005T055429Z-b18ff49d14ea-frozen-final-2/896633e93a7e4d1bb0a10f49fecd414b-tests-benchmarks-test_run_performance.py-test_create_batch_runs_500_10kb.bin",
+      "label": "POST 500 × 10 KB Memray · repeat 2",
+      "sha256": "f2c16bfff5ddd6e3b7a37906a6c6d3752917dcc484b46a44b40503aa89379d04",
+      "size_bytes": 52781
+    },
+    "memory-post-500-10kb-r3": {
+      "path": "profiles/memory/20261005T055429Z-b18ff49d14ea-frozen-final-3/acc64fd7497f4339adf627a7760ad20b-tests-benchmarks-test_run_performance.py-test_create_batch_runs_500_10kb.bin",
+      "label": "POST 500 × 10 KB Memray · repeat 3",
+      "sha256": "511c2ec9306d58bad67ebffec7880f6cf8efe93599a6a18b2dae84076c4780f7",
+      "size_bytes": 52605
+    },
+    "cpu-post-500-10kb-s1-result": {
+      "path": "measurements/20261005T055651.447971Z/session-1/post-500-10kb/cpu/result.json",
+      "label": "POST 500 × 10 KB cold result · session 1",
+      "sha256": "f5d2ae88e4b84b7ae7138e7b8047bcc4d1a78e246aad5ec6acdb73f28cc0cffd",
+      "size_bytes": 29340
+    },
+    "cpu-post-500-10kb-s1-cleanup": {
+      "path": "measurements/20261005T055651.447971Z/session-1/post-500-10kb/cpu/resources.json",
+      "label": "POST 500 × 10 KB cleanup · session 1",
+      "sha256": "773b278189bc41c804164bb592e547e2bd555a2f2cadac6da473f6baa17a4981",
+      "size_bytes": 251
+    },
+    "cpu-post-500-10kb-s1-pstat": {
+      "path": "profiles/cpu/20261005T055651.447971Z/session-1/post-500-10kb/cpu.pstat",
+      "label": "POST 500 × 10 KB Yappi pstats · session 1",
+      "sha256": "43f9b4d4245a1e311a50e07c417953e922f70eee8ffaa1c93a4da25c5c7f435c",
+      "size_bytes": 1182890
+    },
+    "cpu-post-500-10kb-s2-result": {
+      "path": "measurements/20261005T055651.447971Z/session-2/post-500-10kb/cpu/result.json",
+      "label": "POST 500 × 10 KB cold result · session 2",
+      "sha256": "159a6d0562286df549ed52ee2542945d1afbfdf331b9a38939a042c66ed8c732",
+      "size_bytes": 29348
+    },
+    "cpu-post-500-10kb-s2-cleanup": {
+      "path": "measurements/20261005T055651.447971Z/session-2/post-500-10kb/cpu/resources.json",
+      "label": "POST 500 × 10 KB cleanup · session 2",
+      "sha256": "de71011be382a381a9ecd9bef36f693715e80476359e3db2fce98a67bb3a04df",
+      "size_bytes": 251
+    },
+    "cpu-post-500-10kb-s2-pstat": {
+      "path": "profiles/cpu/20261005T055651.447971Z/session-2/post-500-10kb/cpu.pstat",
+      "label": "POST 500 × 10 KB Yappi pstats · session 2",
+      "sha256": "471fff658f90920ab0d4e06216eacf79721d7f019730f3ac543e1d908e66b1ff",
+      "size_bytes": 1182890
+    },
+    "cpu-post-500-10kb-s3-result": {
+      "path": "measurements/20261005T055651.447971Z/session-3/post-500-10kb/cpu/result.json",
+      "label": "POST 500 × 10 KB cold result · session 3",
+      "sha256": "647a2200b9372079056660e9a3d584effda91fcaac088a3db4ba824b6d7a5e2f",
+      "size_bytes": 29347
+    },
+    "cpu-post-500-10kb-s3-cleanup": {
+      "path": "measurements/20261005T055651.447971Z/session-3/post-500-10kb/cpu/resources.json",
+      "label": "POST 500 × 10 KB cleanup · session 3",
+      "sha256": "085553fe3cd60cd3f07cfc017c3180a0f3cf03e2900f63be34c046f9c2f8bed7",
+      "size_bytes": 251
+    },
+    "cpu-post-500-10kb-s3-pstat": {
+      "path": "profiles/cpu/20261005T055651.447971Z/session-3/post-500-10kb/cpu.pstat",
+      "label": "POST 500 × 10 KB Yappi pstats · session 3",
+      "sha256": "e949a78a917e2432aab5a5bc98f5ea4ebc59dc6be51fe4c21bf6c3b54b768cda",
+      "size_bytes": 1182984
+    },
+    "cpu-post-500-10kb-s1": {
+      "path": "profiles/cpu/20261005T055651.447971Z/session-1/post-500-10kb/cpu.txt",
+      "label": "POST 500 × 10 KB cold CPU table · session 1",
+      "sha256": "cffb1fe11b7fc38f1083fd502b8a99fd03bfe29fa5dc7d213a8c2c86be6e23f8",
+      "size_bytes": 504945
+    },
+    "memory-baseline-post-50-100kb": {
+      "path": "measurements/baseline-bdf1239-gxSv1A8k/original-memory/baseline-tests-benchmarks-test_run_performance.py-test_create_batch_runs_50_100kb.bin",
+      "label": "POST 50 × 100 KB original baseline Memray",
+      "sha256": "0c69f16155b96c0cc6c423da8aba46411842fb524fda311869528a40c05ae392",
+      "size_bytes": 42462
+    },
+    "memory-post-50-100kb-r1": {
+      "path": "profiles/memory/20261005T055429Z-b18ff49d14ea-frozen-final-1/d113ae369e35413db43df9629bdf4cfe-tests-benchmarks-test_run_performance.py-test_create_batch_runs_50_100kb.bin",
+      "label": "POST 50 × 100 KB Memray · repeat 1",
+      "sha256": "708652668877219c8f0424eb5e63cb190d41c82a98f463796bb0f449e4dce43f",
+      "size_bytes": 35191
+    },
+    "memory-post-50-100kb-r2": {
+      "path": "profiles/memory/20261005T055429Z-b18ff49d14ea-frozen-final-2/896633e93a7e4d1bb0a10f49fecd414b-tests-benchmarks-test_run_performance.py-test_create_batch_runs_50_100kb.bin",
+      "label": "POST 50 × 100 KB Memray · repeat 2",
+      "sha256": "b7520ea8f48d94e270c28db47e243e96ffcdc0ece0ce4843d57fa3190d7517aa",
+      "size_bytes": 35797
+    },
+    "memory-post-50-100kb-r3": {
+      "path": "profiles/memory/20261005T055429Z-b18ff49d14ea-frozen-final-3/acc64fd7497f4339adf627a7760ad20b-tests-benchmarks-test_run_performance.py-test_create_batch_runs_50_100kb.bin",
+      "label": "POST 50 × 100 KB Memray · repeat 3",
+      "sha256": "9e855cbaaf4ebee911206650d140ed2379c703cea99c8e4b587d8b5745fdf046",
+      "size_bytes": 35296
+    },
+    "cpu-post-50-100kb-s1-result": {
+      "path": "measurements/20261005T055651.447971Z/session-1/post-50-100kb/cpu/result.json",
+      "label": "POST 50 × 100 KB cold result · session 1",
+      "sha256": "2cba1fa45aa7ef296b62590d692fd7b2accc47acbbac44e3bc0becaddce9be2f",
+      "size_bytes": 7738
+    },
+    "cpu-post-50-100kb-s1-cleanup": {
+      "path": "measurements/20261005T055651.447971Z/session-1/post-50-100kb/cpu/resources.json",
+      "label": "POST 50 × 100 KB cleanup · session 1",
+      "sha256": "e38f67eabc037bf5c2bb8ab6684d82bd212727f545ca98568d0d3af53cf99786",
+      "size_bytes": 251
+    },
+    "cpu-post-50-100kb-s1-pstat": {
+      "path": "profiles/cpu/20261005T055651.447971Z/session-1/post-50-100kb/cpu.pstat",
+      "label": "POST 50 × 100 KB Yappi pstats · session 1",
+      "sha256": "03f03e69aca9e0ec095a29747874486afaa19f6ed6e8f5cbcc652863a1282c46",
+      "size_bytes": 1182772
+    },
+    "cpu-post-50-100kb-s2-result": {
+      "path": "measurements/20261005T055651.447971Z/session-2/post-50-100kb/cpu/result.json",
+      "label": "POST 50 × 100 KB cold result · session 2",
+      "sha256": "cfe97b0a83f4c8c96585c0ab88d4703ced6f0b29f64062b9ce40b8d0bb5a426f",
+      "size_bytes": 7734
+    },
+    "cpu-post-50-100kb-s2-cleanup": {
+      "path": "measurements/20261005T055651.447971Z/session-2/post-50-100kb/cpu/resources.json",
+      "label": "POST 50 × 100 KB cleanup · session 2",
+      "sha256": "27c11c3c5f0acd02a588968a8cc4fbab1eb1ad7226635100dc9d90ba93bde611",
+      "size_bytes": 251
+    },
+    "cpu-post-50-100kb-s2-pstat": {
+      "path": "profiles/cpu/20261005T055651.447971Z/session-2/post-50-100kb/cpu.pstat",
+      "label": "POST 50 × 100 KB Yappi pstats · session 2",
+      "sha256": "563c4c27040b27168b01a2453c3e638f61c27c924e2b1e06999a581af0f171b2",
+      "size_bytes": 1182772
+    },
+    "cpu-post-50-100kb-s3-result": {
+      "path": "measurements/20261005T055651.447971Z/session-3/post-50-100kb/cpu/result.json",
+      "label": "POST 50 × 100 KB cold result · session 3",
+      "sha256": "182128034f1257cbf20637db636812a19bcfe52255b0a1887980f867213ab9ef",
+      "size_bytes": 7735
+    },
+    "cpu-post-50-100kb-s3-cleanup": {
+      "path": "measurements/20261005T055651.447971Z/session-3/post-50-100kb/cpu/resources.json",
+      "label": "POST 50 × 100 KB cleanup · session 3",
+      "sha256": "1968d37e006437785071e8c1185e10a2339354521fb4206a8385ff3a60876dd6",
+      "size_bytes": 251
+    },
+    "cpu-post-50-100kb-s3-pstat": {
+      "path": "profiles/cpu/20261005T055651.447971Z/session-3/post-50-100kb/cpu.pstat",
+      "label": "POST 50 × 100 KB Yappi pstats · session 3",
+      "sha256": "4d3807664a11ac61943e0f406babaf5c828ad9581a92563e4fa7e41af5bee469",
+      "size_bytes": 1182772
+    },
+    "cpu-post-50-100kb-s1": {
+      "path": "profiles/cpu/20261005T055651.447971Z/session-1/post-50-100kb/cpu.txt",
+      "label": "POST 50 × 100 KB cold CPU table · session 1",
+      "sha256": "908d8c928132d8862e4a0502271381ecd65a2d223b1c236d658d107a9fd58581",
+      "size_bytes": 504797
+    },
+    "memory-baseline-get-10kb": {
+      "path": "measurements/baseline-bdf1239-gxSv1A8k/original-memory/baseline-tests-benchmarks-test_run_performance.py-test_get_run_10kb.bin",
+      "label": "GET 10 KB original baseline Memray",
+      "sha256": "6f88b6cbcb6cb1fa23b2cb73156320e722257d0a62b6cc5d76139ba8b2f7635a",
+      "size_bytes": 37443
+    },
+    "memory-get-10kb-r1": {
+      "path": "profiles/memory/20261005T055429Z-b18ff49d14ea-frozen-final-1/d113ae369e35413db43df9629bdf4cfe-tests-benchmarks-test_run_performance.py-test_get_run_10kb.bin",
+      "label": "GET 10 KB Memray · repeat 1",
+      "sha256": "e1ebb1bc7e88125f840c27eaacfd96bb1a28417ee912cac4f6169af03839fe3d",
+      "size_bytes": 29662
+    },
+    "memory-get-10kb-r2": {
+      "path": "profiles/memory/20261005T055429Z-b18ff49d14ea-frozen-final-2/896633e93a7e4d1bb0a10f49fecd414b-tests-benchmarks-test_run_performance.py-test_get_run_10kb.bin",
+      "label": "GET 10 KB Memray · repeat 2",
+      "sha256": "0b22eab4a600230abe4491972c48a3619402b11261bccebe3986313aff4154ae",
+      "size_bytes": 29590
+    },
+    "memory-get-10kb-r3": {
+      "path": "profiles/memory/20261005T055429Z-b18ff49d14ea-frozen-final-3/acc64fd7497f4339adf627a7760ad20b-tests-benchmarks-test_run_performance.py-test_get_run_10kb.bin",
+      "label": "GET 10 KB Memray · repeat 3",
+      "sha256": "db0a6138176ab0dfb390ead760679f54d367b866e293585fd87f1d42b7787496",
+      "size_bytes": 29672
+    },
+    "cpu-get-10kb-s1-result": {
+      "path": "measurements/20261005T055651.447971Z/session-1/get-10kb/cpu/result.json",
+      "label": "GET 10 KB cold result · session 1",
+      "sha256": "fd7e68471206f15c0fcc5ab0af70384bc2e5b22f427abae7a5327ca0b7042705",
+      "size_bytes": 5300
+    },
+    "cpu-get-10kb-s1-cleanup": {
+      "path": "measurements/20261005T055651.447971Z/session-1/get-10kb/cpu/resources.json",
+      "label": "GET 10 KB cleanup · session 1",
+      "sha256": "8dfbcef3d7a62829658f36cd749c99094d56c5e89aa929014a9faeeda91fe812",
+      "size_bytes": 251
+    },
+    "cpu-get-10kb-s1-pstat": {
+      "path": "profiles/cpu/20261005T055651.447971Z/session-1/get-10kb/cpu.pstat",
+      "label": "GET 10 KB Yappi pstats · session 1",
+      "sha256": "9919cb17fcdd2dcff5e5e50327eda21a7c1b56b3c355e66459ffc8e4e14ac7e4",
+      "size_bytes": 1180597
+    },
+    "cpu-get-10kb-s2-result": {
+      "path": "measurements/20261005T055651.447971Z/session-2/get-10kb/cpu/result.json",
+      "label": "GET 10 KB cold result · session 2",
+      "sha256": "87f5efb6e8d05d5a537061fe43d9e5db203be1e28ffb0c2ef0e01e486a4ac7b0",
+      "size_bytes": 5277
+    },
+    "cpu-get-10kb-s2-cleanup": {
+      "path": "measurements/20261005T055651.447971Z/session-2/get-10kb/cpu/resources.json",
+      "label": "GET 10 KB cleanup · session 2",
+      "sha256": "1c8e59844e18d2de6ddd43244782d406b6a620ebaf8ae3b2a240da120da5933a",
+      "size_bytes": 251
+    },
+    "cpu-get-10kb-s2-pstat": {
+      "path": "profiles/cpu/20261005T055651.447971Z/session-2/get-10kb/cpu.pstat",
+      "label": "GET 10 KB Yappi pstats · session 2",
+      "sha256": "6b87f426d41cca29d9f7b63323c74507fc1085a968158d4555e7dd1b9cc5850e",
+      "size_bytes": 1180691
+    },
+    "cpu-get-10kb-s3-result": {
+      "path": "measurements/20261005T055651.447971Z/session-3/get-10kb/cpu/result.json",
+      "label": "GET 10 KB cold result · session 3",
+      "sha256": "1c71a761011d977ab7008b331d838224033c2fd9070eccea52edcc907789785c",
+      "size_bytes": 5300
+    },
+    "cpu-get-10kb-s3-cleanup": {
+      "path": "measurements/20261005T055651.447971Z/session-3/get-10kb/cpu/resources.json",
+      "label": "GET 10 KB cleanup · session 3",
+      "sha256": "27d93cb273cf204d5c71deaec0a8502cd3d1116dfd8e374ada6b1c471b20f239",
+      "size_bytes": 251
+    },
+    "cpu-get-10kb-s3-pstat": {
+      "path": "profiles/cpu/20261005T055651.447971Z/session-3/get-10kb/cpu.pstat",
+      "label": "GET 10 KB Yappi pstats · session 3",
+      "sha256": "bb3a2ba7bdf9f8262a02ba7066a3b324c4f23a27c113a62304f57bdb81c3e3c3",
+      "size_bytes": 1180597
+    },
+    "cpu-get-10kb-s1": {
+      "path": "profiles/cpu/20261005T055651.447971Z/session-1/get-10kb/cpu.txt",
+      "label": "GET 10 KB cold CPU table · session 1",
+      "sha256": "9025c118f229d938613a783042367b947841ca8df282827c2668975fa9a92666",
+      "size_bytes": 505389
+    },
+    "memory-baseline-get-100kb": {
+      "path": "measurements/baseline-bdf1239-gxSv1A8k/original-memory/baseline-tests-benchmarks-test_run_performance.py-test_get_run_100kb.bin",
+      "label": "GET 100 KB original baseline Memray",
+      "sha256": "9536049073586ca0141ac3f07cb2c39ddeaee88179bc64612fd1c973b9984bab",
+      "size_bytes": 37586
+    },
+    "memory-get-100kb-r1": {
+      "path": "profiles/memory/20261005T055429Z-b18ff49d14ea-frozen-final-1/d113ae369e35413db43df9629bdf4cfe-tests-benchmarks-test_run_performance.py-test_get_run_100kb.bin",
+      "label": "GET 100 KB Memray · repeat 1",
+      "sha256": "9d63064834cf62c8712574f2a9e0095f28c3d53b412a9d72ce3645013c2bca0d",
+      "size_bytes": 29826
+    },
+    "memory-get-100kb-r2": {
+      "path": "profiles/memory/20261005T055429Z-b18ff49d14ea-frozen-final-2/896633e93a7e4d1bb0a10f49fecd414b-tests-benchmarks-test_run_performance.py-test_get_run_100kb.bin",
+      "label": "GET 100 KB Memray · repeat 2",
+      "sha256": "dfecd50921f00a4562bccbb25efc1686e779919d74531d3ba3e3f2c701502793",
+      "size_bytes": 29702
+    },
+    "memory-get-100kb-r3": {
+      "path": "profiles/memory/20261005T055429Z-b18ff49d14ea-frozen-final-3/acc64fd7497f4339adf627a7760ad20b-tests-benchmarks-test_run_performance.py-test_get_run_100kb.bin",
+      "label": "GET 100 KB Memray · repeat 3",
+      "sha256": "acb867a2987d4631099d99d1ddc81333fd51fc167ee3b75312e3395e5ce4274c",
+      "size_bytes": 29718
+    },
+    "cpu-get-100kb-s1-result": {
+      "path": "measurements/20261005T055651.447971Z/session-1/get-100kb/cpu/result.json",
+      "label": "GET 100 KB cold result · session 1",
+      "sha256": "8ee838cd75b00eb840c590da66f33acee5074ddc839947672ce792bcb48f57d0",
+      "size_bytes": 5291
+    },
+    "cpu-get-100kb-s1-cleanup": {
+      "path": "measurements/20261005T055651.447971Z/session-1/get-100kb/cpu/resources.json",
+      "label": "GET 100 KB cleanup · session 1",
+      "sha256": "ecdac923afb8d94f172ce83bcd61b5e04bc2b0b27816ee5cade1e375f729e414",
+      "size_bytes": 251
+    },
+    "cpu-get-100kb-s1-pstat": {
+      "path": "profiles/cpu/20261005T055651.447971Z/session-1/get-100kb/cpu.pstat",
+      "label": "GET 100 KB Yappi pstats · session 1",
+      "sha256": "49be86efc9076f0427c660cdf9d2c6f8bcbb75c92450ffd57eb9be7309fd4185",
+      "size_bytes": 1181773
+    },
+    "cpu-get-100kb-s2-result": {
+      "path": "measurements/20261005T055651.447971Z/session-2/get-100kb/cpu/result.json",
+      "label": "GET 100 KB cold result · session 2",
+      "sha256": "276c52f0ad7baaf98864b8094e4f69205105d95d3158a5f9fb0b700af819a497",
+      "size_bytes": 5310
+    },
+    "cpu-get-100kb-s2-cleanup": {
+      "path": "measurements/20261005T055651.447971Z/session-2/get-100kb/cpu/resources.json",
+      "label": "GET 100 KB cleanup · session 2",
+      "sha256": "b57a4d499096ea070137e68be9f84d881a50dd8019d62eb10c33a4b69ddc40e5",
+      "size_bytes": 251
+    },
+    "cpu-get-100kb-s2-pstat": {
+      "path": "profiles/cpu/20261005T055651.447971Z/session-2/get-100kb/cpu.pstat",
+      "label": "GET 100 KB Yappi pstats · session 2",
+      "sha256": "5924ff3dafb0eecca169041953896e5a38f6d61ca5f79f263e8f8a8257bbe69a",
+      "size_bytes": 1181679
+    },
+    "cpu-get-100kb-s3-result": {
+      "path": "measurements/20261005T055651.447971Z/session-3/get-100kb/cpu/result.json",
+      "label": "GET 100 KB cold result · session 3",
+      "sha256": "27dc9760a473f6ad1bcbc24993c6a796c0f7ed611a7a593469cae0af3911475f",
+      "size_bytes": 5306
+    },
+    "cpu-get-100kb-s3-cleanup": {
+      "path": "measurements/20261005T055651.447971Z/session-3/get-100kb/cpu/resources.json",
+      "label": "GET 100 KB cleanup · session 3",
+      "sha256": "c34835b1401424ab67fa217d272cbf816ccda5e1c66ec37d7c404a61683909ef",
+      "size_bytes": 251
+    },
+    "cpu-get-100kb-s3-pstat": {
+      "path": "profiles/cpu/20261005T055651.447971Z/session-3/get-100kb/cpu.pstat",
+      "label": "GET 100 KB Yappi pstats · session 3",
+      "sha256": "6a3a84c8b06c1c4c10f70d51c70df987c47022f9c2c2ac0c3201ca32b50871b0",
+      "size_bytes": 1181679
+    },
+    "cpu-get-100kb-s1": {
+      "path": "profiles/cpu/20261005T055651.447971Z/session-1/get-100kb/cpu.txt",
+      "label": "GET 100 KB cold CPU table · session 1",
+      "sha256": "1cbc2d6b27fbe64ccb820579e6b1a245a223d855a52e4dca82708c6bb8b6602e",
+      "size_bytes": 505833
+    },
+    "experiment": {
+      "path": "measurements/frozen-final/20261005T055429Z-b18ff49d14ea/experiment.json",
+      "label": "Frozen measurement procedure and source hashes",
+      "sha256": "3752e3370234711194c365a2868a67a0ca28fec8453cc566278290f66f035a15",
+      "size_bytes": 1793
+    },
+    "commands": {
+      "path": "measurements/frozen-final/20261005T055429Z-b18ff49d14ea/commands.json",
+      "label": "Passing correctness, benchmark and profiler commands",
+      "sha256": "9298cc772571c4d80354793630c0b12e28b18ffa8c2739df6026bf24dd4ed321",
+      "size_bytes": 2734
+    },
+    "cleanup": {
+      "path": "measurements/frozen-final/20261005T055429Z-b18ff49d14ea/cleanup.json",
+      "label": "Only dedicated resources removed",
+      "sha256": "9f9d4eabee92985a42c61eaf16ab86ce59fbe93abf9b2130387174af50114156",
+      "size_bytes": 73
+    },
+    "final-verification": {
+      "path": "measurements/frozen-final/20261005T055429Z-b18ff49d14ea/final-verification.json",
+      "label": "Exact measured code and freeze decision",
+      "sha256": "6073bbcb7a7ee5ec06158f4226a51887487c78c58df73b95074150f73fb30cfc",
+      "size_bytes": 301
+    },
+    "correctness": {
+      "path": "measurements/frozen-final/20261005T055429Z-b18ff49d14ea/correctness.log",
+      "label": "17 passing tests: 10 application, 7 dashboard",
+      "sha256": "aeb656d537b199ba5a9058844ffcf83bba3cc01427d3343991f2e7aef6fab31b",
+      "size_bytes": 1199
+    },
+    "measured-route": {
+      "path": "measurements/frozen-final/20261005T055429Z-b18ff49d14ea/source/ls_py_handler/api/routes/runs.py",
+      "label": "Restored orjson GET route",
+      "sha256": "d674f1f5787c7d976fab19589444ead11ccfe060c1874313c033ab4f8738e184",
+      "size_bytes": 9627
+    },
+    "measured-parser": {
+      "path": "measurements/frozen-final/20261005T055429Z-b18ff49d14ea/source/ls_py_handler/api/streaming.py",
+      "label": "Frozen POST read-ahead",
+      "sha256": "b906a46ec0a51e39a381fb78870edcd39bf570b8ac2c73c0459de43d958b67fa",
+      "size_bytes": 5826
+    },
+    "original-workloads": {
+      "path": "measurements/frozen-final/20261005T055429Z-b18ff49d14ea/source/tests/benchmarks/test_run_performance.py",
+      "label": "Unchanged supplied benchmarks",
+      "sha256": "07e00cbe429eb75b48364ab1b34fac016313a9634867ae99ac26a9159e7117f9",
+      "size_bytes": 5838
+    },
+    "base-classifier": {
+      "path": "measurements/frozen-final/20261005T055429Z-b18ff49d14ea/source/scripts/memory_groups.py",
+      "label": "Measured allocation grouping rules",
+      "sha256": "c3dd29979cc36f5342381a4d36bfdd29321a1d8a2c7b2e83d35a81d8fabacedd",
+      "size_bytes": 3528
+    },
+    "grouping-publication": {
+      "path": "measurements/frozen-final/publish.py",
+      "label": "Exact peak attribution and aggregation rules",
+      "sha256": "e53693a5adc810439702643a4a37c23fa23b0899517d90c86eab565d54fb83e8",
+      "size_bytes": 18073
+    },
+    "cold-cpu-summary": {
+      "path": "measurements/20261005T055651.447971Z/summary.csv",
+      "label": "12 accepted cold captures",
+      "sha256": "748edb64767fb905abba76aa43a9a6c5c0f5b819e5b9035f5572f0ab8a901024",
+      "size_bytes": 3496
+    }
+  }
+}

@@ -151,13 +151,6 @@ function profileSection(title, description, id) {
   return section;
 }
 
-function profileNotes(title, paragraphs) {
-  const notes = html('details', 'profile-notes');
-  notes.append(html('summary', '', title));
-  paragraphs.forEach(text => notes.append(html('p', 'profile-scope', text)));
-  return notes;
-}
-
 function cpuSeconds(value) {
   return value > 0 && value < 0.001 ? '<0.001' : number(value, 3);
 }
@@ -334,7 +327,9 @@ function baselineMetricCard(label, value, unit, detail, digits = 3) {
 }
 
 function nextExperiment(stages) {
+  if (stages.at(-1)?.optimization_frozen) return undefined;
   const current = stages.at(-1);
+  if (current.parser_followup_complete) return null;
   const topCurrent = workload(current.cpu, 'post-500-10kb')?.functions?.reduce((top, item) => !top || item.inclusive_s > top.inclusive_s ? item : top, null);
   if (!topCurrent) return null;
   const label = topCurrent.label.toLowerCase();
@@ -389,7 +384,6 @@ function renderBaselineCpu(stage) {
   const section = profileSection('Baseline CPU', 'Cold phase medians and function details, with their interpretations in the same tables.', 'profile-cpu');
   const details = detailedCpuTables(stage);
   details.classList.add('profile-detail-group');
-  details.open = true;
   section.append(details);
   return section;
 }
@@ -417,8 +411,8 @@ function renderBaselineMemory(stage) {
   drivers.append(html('h3', '', 'POST 500 · payload allocations relevant to encoding'));
   drivers.append(profileTable('Baseline POST 500 encoding allocations', ['Allocation', 'MiB at peak', 'Interpretation'], allocations.map(item => [item.label, number(item.mib, 1), driverNotes[item.label]]), [1]));
   section.append(peaks, drivers);
-  const details = html('details', 'profile-detail-group');
-  details.append(html('summary', '', 'Exact baseline memory tables and source recordings'), detailedMemoryTables(stage));
+  const details = html('section', 'profile-detail-group');
+  details.append(html('h3', '', 'Exact baseline memory tables and source recordings'), detailedMemoryTables(stage));
   section.append(details);
   return section;
 }
@@ -476,7 +470,7 @@ function renderProfileOverview(stages) {
   evidence.append(html('h3', '', 'What the measurements show'), html('p', '', current.findings?.[0]?.interpretation || current.summary));
   const candidate = nextExperiment(stages);
   const next = html('article');
-  next.append(html('h3', '', 'Next optimization candidate'), html('p', '', candidate ? `${candidate.optimization} — ${candidate.evidence}` : 'Use the detailed evidence below to select the next experiment.'));
+  next.append(html('h3', '', current.optimization_frozen ? 'Optimization work frozen' : current.parser_followup_complete ? 'Parser decision' : 'Next optimization candidate'), html('p', '', current.parser_followup_complete ? current.decision_summary || 'Retained with the measured latency trade-off; no further parser change selected.' : candidate ? `${candidate.optimization} — ${candidate.evidence}` : 'Use the detailed evidence below to select the next experiment.'));
   story.append(changed, evidence, next);
   section.append(story);
   return section;
@@ -496,22 +490,26 @@ function detailedCpuTables(stage) {
     'JSON decode': 'Smaller than batch searching.',
     'Response encoding': 'Not a priority from this profile.'
   };
-  const details = html('details', 'profile-stage-details');
-  details.append(html('summary', '', `${stage.title} · exact CPU tables`));
+  const details = html('section', 'profile-exact-tables');
+  details.setAttribute('aria-label', `${stage.title} exact CPU tables`);
   if (stage.cpu.phase_medians?.length) {
     const headers = ['Workload', 'Imports', 'Startup', 'First request', 'Total'];
     if (baseline) headers.push('Interpretation');
     details.append(profileTable(`${stage.title} cold CPU phase medians`, headers, stage.cpu.phase_medians.map(row => [row.label, cpuSeconds(row.imports_s), cpuSeconds(row.startup_s), cpuSeconds(row.first_request_s), cpuSeconds(row.total_s), ...(baseline ? [workloadNotes[row.id] || 'Recorded for reference.'] : [])]), [1, 2, 3, 4]));
     details.append(profileSource(stage, 'cold-cpu-summary', 'Open 12-capture summary'));
   }
+  const grid = html('div', 'profile-table-grid');
   stage.cpu.workloads.forEach(item => {
-    details.append(html('h4', '', item.label));
+    const card = html('article', 'profile-table-card');
+    card.append(html('h4', '', item.label));
     const annotate = baseline && item.id === 'post-500-10kb';
-    const headers = ['Function', 'Calls', 'Self CPU (s)', 'Inclusive CPU (s)'];
+    const headers = ['Function', 'Calls', 'Self (s)', 'Inclusive (s)'];
     if (annotate) headers.push('Interpretation');
-    details.append(profileTable(`${stage.title} ${item.label} CPU functions`, headers, item.functions.map(result => [result.label, number(result.calls, 0), cpuSeconds(result.self_s), cpuSeconds(result.inclusive_s), ...(annotate ? [hotspotNotes[result.label] || 'Recorded for reference.'] : [])]), [1, 2, 3]));
-    details.append(profileSource(stage, item.source_id, `Open ${item.label} CPU text`));
+    card.append(profileTable(`${stage.title} ${item.label} CPU functions`, headers, item.functions.map(result => [result.label, number(result.calls, 0), cpuSeconds(result.self_s), cpuSeconds(result.inclusive_s), ...(annotate ? [hotspotNotes[result.label] || 'Recorded for reference.'] : [])]), [1, 2, 3]));
+    card.append(profileSource(stage, item.source_id, `Open ${item.label} CPU text`));
+    grid.append(card);
   });
+  details.append(grid);
   return details;
 }
 
@@ -542,32 +540,36 @@ function renderCpuComparison(stages) {
     section.append(note);
   }
 
-  const details = html('details', 'profile-detail-group');
-  details.append(html('summary', '', 'Exact CPU tables and source reports'));
+  const details = html('section', 'profile-detail-group');
+  details.append(html('h3', '', 'Exact CPU tables and source reports'));
   details.append(detailedCpuTables(current));
-  section.append(details, profileNotes('How to read this CPU evidence', [stages.at(-1).cpu.reading_guide, stages.at(-1).cpu.scope, stages.at(-1).cpu.limitation]));
+  section.append(details);
   return section;
 }
 
 function detailedMemoryTables(stage) {
-  const details = html('details', 'profile-stage-details');
-  details.append(html('summary', '', `${stage.title} · exact memory tables`));
+  const details = html('section', 'profile-exact-tables');
+  details.setAttribute('aria-label', `${stage.title} exact memory tables`);
   details.append(html('p', 'profile-meta', 'Five largest groups at the recorded peak. Test data and GET seeding are included. No Python stack means attribution is unavailable.'));
+  const grid = html('div', 'profile-table-grid');
   stage.memory.workloads.forEach(item => {
-    details.append(html('h4', '', `${item.label} · ${number(item.peak_mib)} MiB peak`));
+    const card = html('article', 'profile-table-card');
+    card.append(html('h4', '', `${item.label} · ${number(item.peak_mib)} MiB peak`));
     const groups = [...item.allocations].sort((a, b) => b.mib - a.mib || a.label.localeCompare(b.label));
     const visible = groups.slice(0, 5);
     const smaller = groups.slice(5);
     if (smaller.length) visible.push({ label: `Remaining smaller groups (${smaller.length})`, mib: smaller.reduce((total, result) => total + result.mib, 0) });
     const rows = results => results.map(result => [result.label, number(result.mib), `${number(item.peak_mib ? result.mib / item.peak_mib * 100 : 0, 1)}%`]);
-    details.append(profileTable(`${stage.title} ${item.label} allocations`, ['Allocation group', 'MiB at peak', '% of peak'], rows(visible), [1, 2]));
+    card.append(profileTable(`${stage.title} ${item.label} allocations`, ['Allocation group', 'MiB at peak', '% of peak'], rows(visible), [1, 2]));
     if (smaller.length) {
       const remainder = html('details', 'profile-notes');
       remainder.append(html('summary', '', 'Show remaining smaller groups'), profileTable(`${stage.title} ${item.label} smaller allocations`, ['Allocation group', 'MiB at peak', '% of peak'], rows(smaller), [1, 2]));
-      details.append(remainder);
+      card.append(remainder);
     }
-    details.append(profileSource(stage, item.source_id, 'Download Memray recording'));
+    card.append(profileSource(stage, item.source_id, 'Download Memray recording'));
+    grid.append(card);
   });
+  details.append(grid);
   return details;
 }
 
@@ -592,16 +594,63 @@ function renderMemoryComparison(stages) {
   })).filter(row => row.values.every(Number.isFinite));
   section.append(comparisonChart('POST 500 · allocation drivers at peak', 'Recorded stack attribution · absent groups are zero at that peak, not necessarily absent throughout execution', stages, drivers, 'MiB', 1, { x: 'Allocation group', y: 'Allocation at peak (MiB)' }));
 
-  const details = html('details', 'profile-detail-group');
-  details.append(html('summary', '', 'Exact memory tables and source recordings'));
+  const details = html('section', 'profile-detail-group');
+  details.append(html('h3', '', 'Exact memory tables and source recordings'));
   details.append(detailedMemoryTables(stages.at(-1)));
-  section.append(details, profileNotes('How to read this memory evidence', [stages.at(-1).memory.scope, stages.at(-1).memory.reading_guide, stages.at(-1).memory.limitation]));
+  section.append(details);
+  return section;
+}
+
+function renderServerMemory(stage) {
+  const memory = stage.server_memory;
+  if (memory.mode === 'get-decoder') {
+    const section = profileSection('GET decoder · actual API-worker RAM', memory.scope, 'profile-server-memory');
+    const versions = [{ title: 'orjson GET' }, { title: 'Replacement GET decoder' }];
+    const rows = memory.workloads.map(item => ({
+      label: `${item.label} · concurrency ${item.concurrency}`,
+      values: [item.before.warm_peak_mib, item.after.warm_peak_mib]
+    }));
+    section.append(comparisonChart('GET worker peak RSS', 'Median of 3 fresh workers · includes runtime and startup · not Memray', versions, rows, 'MiB', 1, { x: 'GET workload / concurrency', y: 'API-worker peak RSS (MiB)' }));
+    section.append(profileTable('GET decoder · Linux RSS comparison', ['Workload', 'Concurrency', 'First GET peak MiB', 'Warm peak MiB', 'Warm RAM saving', 'Warm latency ms'], memory.workloads.map(item => [
+      item.label, item.concurrency,
+      `${number(item.before.first_peak_mib, 2)} → ${number(item.after.first_peak_mib, 2)}`,
+      `${number(item.before.warm_peak_mib, 2)} → ${number(item.after.warm_peak_mib, 2)}`,
+      `${number(item.warm_saving_mib, 2)} MiB (${number(item.warm_reduction_pct, 1)}%)`,
+      `${number(item.before.warm_median_ms, 1)} → ${number(item.after.warm_median_ms, 1)}`
+    ]), [1, 2, 3, 4, 5]));
+    section.append(html('p', 'profile-meta', memory.limitation));
+    section.append(html('p', 'profile-meta', memory.decision));
+    section.append(profileSource(stage, memory.source_id, 'Open RAM measurements and all repeats'));
+    return section;
+  }
+  const section = profileSection('API-worker RAM · assumed Linux reference', memory.scope, 'profile-server-memory');
+  const versions = [{ title: 'Original baseline' }, { title: 'Pre-parser control' }, { title: 'Retained parser' }];
+  const rows = memory.workloads.map(item => ({
+    label: `${item.label} · concurrency ${item.concurrency}`,
+    values: ['original', 'before', 'after'].map(key => item[key].peak_mib)
+  }));
+  section.append(comparisonChart('Peak worker RSS', 'Median of 3 fresh workers per configuration · separate from Memray', versions, rows, 'MiB', 1, { x: 'POST workload / concurrency', y: 'Peak API-worker RSS (MiB)' }));
+  section.append(profileTable('Assumed Linux peak API-worker RSS', ['Workload', 'Concurrency', 'Original MiB', 'Pre-parser MiB', 'Retained MiB', 'Reduction vs original'], memory.workloads.map(item => [
+    item.label, item.concurrency, number(item.original.peak_mib, 1), number(item.before.peak_mib, 1), number(item.after.peak_mib, 1), `${number(item.reduction_vs_original_pct, 1)}%`
+  ]), [1, 2, 3, 4, 5]));
+  section.append(profileSource(stage, memory.source_id, 'Open RAM measurements and repeats'));
   return section;
 }
 
 function renderEvidence(stages) {
   const current = stages.at(-1);
   const section = profileSection('Evidence and conclusion', 'Short interpretation of the latest saved stage. Exact tables, limitations and pinned source files remain available below.', 'profile-findings');
+  if ((current.retention_decision === 'retained' || current.show_comparison_results) && current.comparison_results) {
+    section.append(html('h3', '', current.comparison_title || 'Paired POST results · versus pre-parser control'));
+    section.append(profileTable('Paired benchmark and tracked memory', ['Workload', 'Latency ms', 'Latency change', 'Tracked peak MiB', 'Peak reduction'], current.comparison_results.filter(item => current.comparison_focus_ids ? current.comparison_focus_ids.includes(item.id) : item.id.startsWith('post')).map(item => [
+      item.label,
+      `${number(item.before_median_ms, 1)} → ${number(item.after_median_ms, 1)}`,
+      `${percentChange(item.before_median_ms, item.after_median_ms) > 0 ? '+' : ''}${number(percentChange(item.before_median_ms, item.after_median_ms), 1)}%`,
+      `${number(item.before_peak_mib, 1)} → ${number(item.after_peak_mib, 1)}`,
+      `${number(-percentChange(item.before_peak_mib, item.after_peak_mib), 1)}%`
+    ]), [1, 2, 3, 4]));
+    section.append(html('p', 'profile-meta', current.comparison_results_scope || 'Median of 3 suites/version. Tracked allocation peaks are not server RAM.'));
+  }
   const list = html('div', 'profile-finding-list');
   current.findings.forEach(finding => {
     const item = html('article', 'profile-finding');
@@ -642,7 +691,7 @@ function renderProfileInterpretation() {
   byId('profile-empty').hidden = Boolean(stages.length);
   byId('profile-print').disabled = !stages.length;
   byId('profile-report-tabs').hidden = !stages.length;
-  if (!stages.some(stage => stage.id === profileState.stage)) profileState.stage = stages[0]?.id || '';
+  if (!stages.some(stage => stage.id === profileState.stage)) profileState.stage = stages.find(stage => stage.optimization_frozen)?.id || stages[0]?.id || '';
   const activeIndex = Math.max(stages.findIndex(stage => stage.id === profileState.stage), 0);
   const active = stages[activeIndex];
   // Historical side experiments use their own measured control, rather than
@@ -710,6 +759,9 @@ function renderProfileInterpretation() {
     reportPanel.append(...renderBaseline(active));
   } else {
     reportPanel.append(renderProfileOverview(comparisonStages), profileState.report === 'memory' ? renderMemoryComparison(comparisonStages) : renderCpuComparison(comparisonStages), renderEvidence(comparisonStages));
+    if (profileState.report === 'memory' && active.server_memory) {
+      reportPanel.insertBefore(renderServerMemory(active), reportPanel.lastElementChild);
+    }
   }
   requestAnimationFrame(() => profileState.charts.forEach(plot => plot.drawProfileChart()));
 }

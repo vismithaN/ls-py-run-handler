@@ -172,12 +172,36 @@ async def test_large_payload():
     )
     async with AsyncClient(app=app, base_url="http://test") as client:
         await assert_roundtrip(client, [run])
+        # A size hint must also handle large/small/large runs in one batch.
+        await assert_roundtrip(
+            client,
+            [
+                make_run("Large first", inputs=run["inputs"]),
+                make_run("Small middle", inputs={"value": 1}),
+                make_run("Large last", outputs=run["outputs"]),
+            ],
+        )
 
 
 async def test_nested_json_and_special_characters():
     run = make_run(
         inputs={
-            "nested": {"items": [None, True, False, 0, -7, 1.25, "", {"deep": []}]}
+            "nested": {
+                "items": [
+                    None,
+                    True,
+                    False,
+                    0,
+                    -7,
+                    1.25,
+                    "",
+                    {"deep": []},
+                    -(2**63),
+                    2**64 - 1,
+                    1e300,
+                    -0.0,
+                ]
+            }
         },
         outputs={"text": '🌍 தமிழ் 中文 café "quotes" \\path\nnext\tcolumn'},
         metadata={"tags": ["one", "two"], "details": {"enabled": True}},

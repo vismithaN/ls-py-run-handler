@@ -63,6 +63,7 @@ async def json_array_items(request: Request):
     offset = 0
     finished = False
     decoder = json.JSONDecoder()
+    read_hint = 0
 
     async def read_more():
         nonlocal buffer, finished
@@ -127,6 +128,11 @@ async def json_array_items(request: Request):
         consume(1)
     else:
         while True:
+            # Large, similar-sized runs need similar amounts of input. Read ahead
+            # before retrying, without changing the small-run path.
+            while len(buffer) < read_hint and not finished:
+                if not await read_more():
+                    break
             while True:
                 try:
                     value, end = decoder.raw_decode(buffer)
@@ -142,6 +148,7 @@ async def json_array_items(request: Request):
                 while separator < len(buffer) and buffer[separator] in " \t\r\n":
                     separator += 1
                 if separator < len(buffer) and buffer[separator] in ",]":
+                    read_hint = min(end, 2 * CHUNK_BYTES) if end > CHUNK_BYTES else 0
                     break
                 # More bytes may complete a number, whitespace or delimiter.
                 del value
