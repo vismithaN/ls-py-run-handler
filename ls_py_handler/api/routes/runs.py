@@ -58,11 +58,13 @@ async def get_s3_client():
 
 async def prepare_runs(request: Request):
     """Validate and encode incrementally before acquiring storage resources."""
+    # Accept JSON media types, including vendor types such as application/*+json.
     media_type = request.headers.get("content-type") or "application/json"
     media_type = media_type.split(";", 1)[0].strip().lower()
     if media_type != "application/json" and not (
         media_type.startswith("application/") and media_type.endswith("+json")
     ):
+        # Preserve distinct validation errors for missing and non-JSON bodies.
         body = await request.body()
         if not body:
             raise RequestValidationError(
@@ -86,7 +88,7 @@ async def prepare_runs(request: Request):
             ]
         )
 
-    # Prepare the batch for S3 upload
+    # One S3 object holds the batch; database rows reference its field byte ranges.
     batch_id = str(uuid.uuid4())
 
     object_key = f"batches/{batch_id}.json"
@@ -97,10 +99,12 @@ async def prepare_runs(request: Request):
     run_ids = []
     errors = []
     index = 0
+    # Validate and encode one run at a time instead of building a full model list.
     async for item in json_array_items(request):
         try:
             run = Run.model_validate(item, from_attributes=True)
         except ValidationError as error:
+            # Include the original array index in each field's validation error.
             for detail in error.errors(include_url=False):
                 detail["loc"] = ("body", index, *detail["loc"])
                 errors.append(detail)
@@ -110,12 +114,14 @@ async def prepare_runs(request: Request):
         item = None
         index += 1
         if errors:
+            # Collect further validation errors without encoding a rejected batch.
             del run
             continue
         if records:
             batch.write(b",")
         batch.write(b"{")
         field_refs = {}
+        # Record offsets while encoding, so repeated field values stay distinct.
         for field_index, (key, value) in enumerate(run.model_dump().items()):
             if field_index:
                 batch.write(b",")
@@ -124,11 +130,13 @@ async def prepare_runs(request: Request):
             encoded = orjson.dumps(value)
             batch.write(encoded)
             if key in ("inputs", "outputs", "metadata"):
+                # Store the value's byte range with an exclusive end offset.
                 field_refs[key] = (
                     f"s3://{settings.S3_BUCKET_NAME}/{object_key}"
                     f"#{start}:{start + len(encoded)}/{key}"
                 )
         batch.write(b"}")
+        # Keep small COPY rows: identifiers, name, and references to large fields.
         records.append(
             (
                 run.id,
@@ -143,6 +151,7 @@ async def prepare_runs(request: Request):
         # Keep only encoded bytes and small DB records, not all input models.
         del run, value, encoded, field_refs
     batch.write(b"]")
+    # Reject invalid or empty batches before the endpoint can write to storage.
     if errors:
         raise RequestValidationError(errors)
     if not records:
@@ -151,6 +160,7 @@ async def prepare_runs(request: Request):
     return object_key, batch_data, records, run_ids
 
 
+# Streaming parsing hides the body type from FastAPI; declare its API schema.
 @router.post(
     "",
     status_code=status.HTTP_201_CREATED,
@@ -245,7 +255,7 @@ async def get_run(
     """
     Get a run by its ID.
     """
-    # Fetch the run from the PG
+    # Fetch run metadata and S3 references, rather than the large JSON fields.
     try:
         row = await db.fetchrow(
             """
@@ -272,7 +282,7 @@ async def get_run(
 
     run_data = dict(row)
 
-    # Function to parse S3 reference
+    # References encode the bucket, object key, byte range, and field name.
     def parse_s3_ref(ref):
         if not ref or not ref.startswith("s3://"):
             return None, None, None, None
@@ -291,6 +301,7 @@ async def get_run(
         return bucket, key, None, None
 
     async def fetch_range(bucket, key, start, end):
+        # Stored end offsets are exclusive; S3 expects an inclusive end byte.
         response = await s3.get_object(
             Bucket=bucket, Key=key, Range=f"bytes={start}-{end - 1}"
         )
@@ -318,6 +329,7 @@ async def get_run(
             start = min(offsets[0] for _, _, offsets, _ in refs)
             end = max(offsets[1] for _, _, offsets, _ in refs)
             data = await fetch_range(bucket, key, start, end)
+            # Rebase each batch offset onto the fetched span before decoding.
             values = [
                 orjson.loads(data[offsets[0] - start : offsets[1] - start])
                 for _, _, offsets, _ in refs
