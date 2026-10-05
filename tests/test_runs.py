@@ -10,6 +10,7 @@ from fastapi.encoders import jsonable_encoder
 from httpx import ASGITransport, AsyncClient
 
 from ls_py_handler.api.routes.runs import Run, get_s3_client
+from ls_py_handler.api.streaming import json_array_items
 from ls_py_handler.config.settings import settings
 from ls_py_handler.main import app
 from ls_py_handler.s3 import get_s3_session
@@ -73,6 +74,12 @@ async def test_create_and_get_run():
     conversion_counts = []
     copy_calls = []
     original_copy = asyncpg.Connection.copy_records_to_table
+    parsed_after_encoding = []
+
+    async def observed_items(request):
+        async for item in json_array_items(request):
+            parsed_after_encoding.append(dump.call_count)
+            yield item
 
     async def counted_copy(db, table, **kwargs):
         copy_calls.append((table, kwargs["columns"]))
@@ -95,6 +102,18 @@ async def test_create_and_get_run():
     with (
         patch.dict(app.dependency_overrides, {get_s3_client: counted_s3_client}),
         patch.object(asyncpg.Connection, "copy_records_to_table", counted_copy),
+        patch("ls_py_handler.api.routes.runs.json_array_items", observed_items),
+        patch.object(
+            Run, "model_dump", autospec=True, side_effect=Run.model_dump
+        ) as dump,
+        patch(
+            "starlette.requests.Request.body",
+            side_effect=AssertionError("Full body buffered"),
+        ),
+        patch(
+            "starlette.requests.Request.json",
+            side_effect=AssertionError("Full input decoded"),
+        ),
     ):
         async with AsyncClient(app=app, base_url="http://test") as client:
             await assert_roundtrip(client, runs)
@@ -105,6 +124,7 @@ async def test_create_and_get_run():
     assert copy_calls == [
         ("runs", ("id", "trace_id", "name", "inputs", "outputs", "metadata"))
     ]  # One database COPY for the entire POST batch.
+    assert parsed_after_encoding == [0, 1, 2]  # Encode run 1 before parsing run 2.
 
 
 async def test_s3_session_reused_but_clients_remain_request_scoped():
@@ -152,18 +172,62 @@ async def test_large_payload():
     )
     async with AsyncClient(app=app, base_url="http://test") as client:
         await assert_roundtrip(client, [run])
+        # A size hint must also handle large/small/large runs in one batch.
+        await assert_roundtrip(
+            client,
+            [
+                make_run("Large first", inputs=run["inputs"]),
+                make_run("Small middle", inputs={"value": 1}),
+                make_run("Large last", outputs=run["outputs"]),
+            ],
+        )
 
 
 async def test_nested_json_and_special_characters():
     run = make_run(
         inputs={
-            "nested": {"items": [None, True, False, 0, -7, 1.25, "", {"deep": []}]}
+            "nested": {
+                "items": [
+                    None,
+                    True,
+                    False,
+                    0,
+                    -7,
+                    1.25,
+                    "",
+                    {"deep": []},
+                    -(2**63),
+                    2**64 - 1,
+                    1e300,
+                    -0.0,
+                ]
+            }
         },
         outputs={"text": '🌍 தமிழ் 中文 café "quotes" \\path\nnext\tcolumn'},
         metadata={"tags": ["one", "two"], "details": {"enabled": True}},
     )
     async with AsyncClient(app=app, base_url="http://test") as client:
         await assert_roundtrip(client, [run])
+        # Split UTF characters, escapes and tokens across receive boundaries.
+        text = orjson.dumps([run]).decode()
+        for encoding in ("utf-8", "utf-16", "utf-32"):
+            # Explicit IDs need to be unique for each successful POST.
+            run["id"] = str(uuid.uuid4())
+            text = orjson.dumps([run]).decode()
+            payload = text.encode(encoding)
+
+            async def pieces(data=payload):
+                for start in range(0, len(data), 7):
+                    yield data[start : start + 7]
+
+            response = await client.post(
+                "/runs",
+                content=pieces(),
+                headers={"Content-Type": "application/vendor+json"},
+            )
+            assert response.status_code == 201, response.text
+            response = await client.get(f"/runs/{run['id']}")
+            assert response.json() == run
 
 
 async def test_empty_and_omitted_fields():
@@ -248,6 +312,41 @@ async def test_invalid_requests_and_missing_runs():
             del invalid["trace_id"]
             response = await client.post("/runs", json=[make_run("Valid"), invalid])
             assert response.status_code == 422
+            assert response.json()["detail"][0]["loc"] == ["body", 1, "trace_id"]
+
+            valid_prefix = orjson.dumps([make_run("Valid prefix")])
+            for malformed in (
+                valid_prefix[:-1],
+                valid_prefix + b" {}",
+                valid_prefix[:-1] + b",]",
+                b"[",
+                b" ",
+            ):
+                response = await client.post(
+                    "/runs",
+                    content=malformed,
+                    headers={"Content-Type": "application/json"},
+                )
+                assert response.status_code == 422, response.text
+                assert response.json()["detail"][0]["type"] == "json_invalid"
+            for value in ({}, "not an array", 3, True):
+                response = await client.post("/runs", json=value)
+                assert response.status_code == 422
+                assert response.json()["detail"][0]["loc"] == ["body"]
+            for body in (b"", b"null"):
+                response = await client.post(
+                    "/runs", content=body, headers={"Content-Type": "application/json"}
+                )
+                assert response.status_code == 422
+                assert response.json()["detail"][0]["type"] == "missing"
+
+            schema = (await client.get("/openapi.json")).json()
+            post = schema["paths"]["/runs"]["post"]
+            assert (
+                post["requestBody"]["content"]["application/json"]["schema"]["type"]
+                == "array"
+            )
+            assert "422" in post["responses"]
 
             assert await db.fetchval("SELECT count(*) FROM runs") == before_rows
             after_keys = set()

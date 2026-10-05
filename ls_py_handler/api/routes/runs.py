@@ -1,14 +1,16 @@
 import asyncio
 import io
 import uuid
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, Optional
 
 import asyncpg
 import orjson
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi.exceptions import RequestValidationError
 from fastapi.responses import ORJSONResponse
-from pydantic import UUID4, BaseModel, Field
+from pydantic import UUID4, BaseModel, Field, ValidationError
 
+from ls_py_handler.api.streaming import json_array_items
 from ls_py_handler.config.settings import settings
 from ls_py_handler.s3 import get_s3_session
 
@@ -52,20 +54,35 @@ async def get_s3_client():
         yield client
 
 
-@router.post("", status_code=status.HTTP_201_CREATED)
-async def create_runs(
-    runs: List[Run],
-    db: asyncpg.Connection = Depends(get_db_conn),
-    s3: Any = Depends(get_s3_client),
-):
-    """
-    Create new runs in batch.
-
-    Takes a JSON array of Run objects, uploads them to MinIO,
-    and stores references to certain fields in PostgreSQL.
-    """
-    if not runs:
-        raise HTTPException(status_code=400, detail="No runs provided")
+async def prepare_runs(request: Request):
+    """Validate and encode incrementally before acquiring storage resources."""
+    media_type = request.headers.get("content-type") or "application/json"
+    media_type = media_type.split(";", 1)[0].strip().lower()
+    if media_type != "application/json" and not (
+        media_type.startswith("application/") and media_type.endswith("+json")
+    ):
+        body = await request.body()
+        if not body:
+            raise RequestValidationError(
+                [
+                    {
+                        "type": "missing",
+                        "loc": ("body",),
+                        "msg": "Field required",
+                        "input": None,
+                    }
+                ]
+            )
+        raise RequestValidationError(
+            [
+                {
+                    "type": "list_type",
+                    "loc": ("body",),
+                    "msg": "Input should be a valid list",
+                    "input": body,
+                }
+            ]
+        )
 
     # Prepare the batch for S3 upload
     batch_id = str(uuid.uuid4())
@@ -74,9 +91,26 @@ async def create_runs(
 
     batch = io.BytesIO()
     batch.write(b"[")
-    run_refs = []
-    for index, run in enumerate(runs):
-        if index:
+    records = []
+    run_ids = []
+    errors = []
+    index = 0
+    async for item in json_array_items(request):
+        try:
+            run = Run.model_validate(item, from_attributes=True)
+        except ValidationError as error:
+            for detail in error.errors(include_url=False):
+                detail["loc"] = ("body", index, *detail["loc"])
+                errors.append(detail)
+            index += 1
+            item = None
+            continue
+        item = None
+        index += 1
+        if errors:
+            del run
+            continue
+        if records:
             batch.write(b",")
         batch.write(b"{")
         field_refs = {}
@@ -93,9 +127,63 @@ async def create_runs(
                     f"#{start}:{start + len(encoded)}/{key}"
                 )
         batch.write(b"}")
-        run_refs.append(field_refs)
+        records.append(
+            (
+                run.id,
+                run.trace_id,
+                run.name,
+                field_refs["inputs"],
+                field_refs["outputs"],
+                field_refs["metadata"],
+            )
+        )
+        run_ids.append(str(run.id))
+        # Keep only encoded bytes and small DB records, not all input models.
+        del run, value, encoded, field_refs
     batch.write(b"]")
+    if errors:
+        raise RequestValidationError(errors)
+    if not records:
+        raise HTTPException(status_code=400, detail="No runs provided")
     batch_data = batch.getvalue()
+    return object_key, batch_data, records, run_ids
+
+
+@router.post(
+    "",
+    status_code=status.HTTP_201_CREATED,
+    responses={
+        422: {
+            "description": "Validation Error",
+            "content": {
+                "application/json": {
+                    "schema": {"$ref": "#/components/schemas/HTTPValidationError"}
+                }
+            },
+        }
+    },
+    openapi_extra={
+        "requestBody": {
+            "required": True,
+            "content": {
+                "application/json": {
+                    "schema": {
+                        "type": "array",
+                        "title": "Runs",
+                        "items": Run.model_json_schema(),
+                    }
+                }
+            },
+        }
+    },
+)
+async def create_runs(
+    prepared: tuple = Depends(prepare_runs),
+    db: asyncpg.Connection = Depends(get_db_conn),
+    s3: Any = Depends(get_s3_client),
+):
+    """Upload one fully validated batch and write its references atomically."""
+    object_key, batch_data, records, run_ids = prepared
 
     # Upload the batch data
     await s3.put_object(
@@ -106,17 +194,6 @@ async def create_runs(
     )
 
     # Send all references together; a failed batch must not leave partial rows.
-    records = (
-        (
-            run.id,
-            run.trace_id,
-            run.name,
-            field_refs["inputs"],
-            field_refs["outputs"],
-            field_refs["metadata"],
-        )
-        for run, field_refs in zip(runs, run_refs, strict=True)
-    )
     async with db.transaction():
         await db.copy_records_to_table(
             "runs",
@@ -126,7 +203,7 @@ async def create_runs(
 
     # These values are already JSON-compatible; skip FastAPI's conversion walk.
     return ORJSONResponse(
-        {"status": "created", "run_ids": [str(run.id) for run in runs]},
+        {"status": "created", "run_ids": run_ids},
         status_code=status.HTTP_201_CREATED,
     )
 
