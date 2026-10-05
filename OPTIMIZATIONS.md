@@ -72,9 +72,9 @@ repeated contents, invalid input and missing storage. The missing-object test
 exposed a silent HTTP 200 with empty fields; I fixed it to return 503, separately
 from performance work. Later tests covered session reuse, parallel clients and
 duplicate-ID rollback. The final [application suite](tests/test_runs.py) groups
-API behavior into seven focused test functions with 15 test cases.
+API behavior into six focused test functions with 14 test cases.
 It checks returned values, rejected writes, rollback, storage failures and
-concurrency without asserting internal method-call counts. All 15 cases passed
+concurrency without asserting internal method-call counts. All 14 cases passed
 against isolated PostgreSQL and object-storage resources after this cleanup.
 
 The experiment cycle was: **baseline, profile, hypothesis, focused change,

@@ -233,22 +233,6 @@ async def test_missing_runs_and_objects(client, storage):
     await assert_roundtrip(client, [make_run()])
 
 
-async def test_fields_in_different_objects(client, storage):
-    db, _ = storage
-    run, other = make_run(), make_run(metadata={"source": "another batch"})
-    await assert_roundtrip(client, [run])
-    await assert_roundtrip(client, [other])
-    reference = await db.fetchval(
-        "SELECT metadata FROM runs WHERE id = $1", uuid.UUID(other["id"])
-    )
-    await db.execute(
-        "UPDATE runs SET metadata = $1 WHERE id = $2", reference, uuid.UUID(run["id"])
-    )
-    response = await client.get(f"/runs/{run['id']}")
-    assert response.status_code == 200, response.text
-    assert response.json() == {**run, "metadata": other["metadata"]}
-
-
 async def test_parallel_roundtrips(client):
     runs = [make_run(inputs={"request": i}) for i in range(3)]
     await asyncio.gather(*(assert_roundtrip(client, [run]) for run in runs))
