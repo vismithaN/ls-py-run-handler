@@ -2,7 +2,7 @@ import asyncio
 import io
 import logging
 import uuid
-from typing import Any, Dict, Optional
+from typing import Any, Dict, NamedTuple, Optional
 
 import asyncpg
 import orjson
@@ -28,8 +28,17 @@ class Run(BaseModel):
     metadata: Dict[str, Any] = {}
 
 
+class PreparedBatch(NamedTuple):
+    """Validated upload bytes, database reference rows, and response IDs."""
+
+    object_key: str
+    batch_data: bytes
+    records: list[tuple]
+    run_ids: list[str]
+
+
 async def get_db_conn():
-    """Get a database connection."""
+    """Yield a request-scoped database connection and close it afterwards."""
     conn = await asyncpg.connect(
         user=settings.DB_USER,
         password=settings.DB_PASSWORD,
@@ -44,7 +53,7 @@ async def get_db_conn():
 
 
 async def get_s3_client():
-    """Get an S3 client for MinIO."""
+    """Yield a request-scoped S3 client using the cached SDK session."""
     session = get_s3_session()
     async with session.create_client(
         "s3",
@@ -56,8 +65,12 @@ async def get_s3_client():
         yield client
 
 
-async def prepare_runs(request: Request):
-    """Validate and encode incrementally before acquiring storage resources."""
+async def prepare_runs(request: Request) -> PreparedBatch:
+    """Validate the complete request before acquiring storage resources.
+
+    Return upload bytes, COPY rows and IDs; the outgoing batch stays in memory.
+    Invalid input raises an HTTP/validation error without writing to storage.
+    """
     # Accept JSON media types, including vendor types such as application/*+json.
     media_type = request.headers.get("content-type") or "application/json"
     media_type = media_type.split(";", 1)[0].strip().lower()
@@ -157,7 +170,7 @@ async def prepare_runs(request: Request):
     if not records:
         raise HTTPException(status_code=400, detail="No runs provided")
     batch_data = batch.getvalue()
-    return object_key, batch_data, records, run_ids
+    return PreparedBatch(object_key, batch_data, records, run_ids)
 
 
 # Streaming parsing hides the body type from FastAPI; declare its API schema.
@@ -190,19 +203,21 @@ async def prepare_runs(request: Request):
     },
 )
 async def create_runs(
-    prepared: tuple = Depends(prepare_runs),
+    prepared: PreparedBatch = Depends(prepare_runs),
     db: asyncpg.Connection = Depends(get_db_conn),
     s3: Any = Depends(get_s3_client),
 ):
-    """Upload one fully validated batch and write its references atomically."""
-    object_key, batch_data, records, run_ids = prepared
+    """Upload a validated batch, then write all references in one DB transaction.
+
+    Only the database writes are atomic; a DB failure can leave the S3 object.
+    """
 
     # Upload the batch data
     try:
         await s3.put_object(
             Bucket=settings.S3_BUCKET_NAME,
-            Key=object_key,
-            Body=batch_data,
+            Key=prepared.object_key,
+            Body=prepared.batch_data,
             ContentType="application/json",
         )
     except Exception as error:
@@ -211,8 +226,8 @@ async def create_runs(
             type(error).__name__,
             extra={
                 "operation": "upload_batch",
-                "object_key": object_key,
-                "run_count": len(records),
+                "object_key": prepared.object_key,
+                "run_count": len(prepared.records),
                 "error_type": type(error).__name__,
             },
         )
@@ -223,7 +238,7 @@ async def create_runs(
         async with db.transaction():
             await db.copy_records_to_table(
                 "runs",
-                records=records,
+                records=prepared.records,
                 columns=("id", "trace_id", "name", "inputs", "outputs", "metadata"),
             )
     except Exception as error:
@@ -232,8 +247,8 @@ async def create_runs(
             type(error).__name__,
             extra={
                 "operation": "write_batch_references",
-                "object_key": object_key,
-                "run_count": len(records),
+                "object_key": prepared.object_key,
+                "run_count": len(prepared.records),
                 "error_type": type(error).__name__,
             },
         )
@@ -241,7 +256,7 @@ async def create_runs(
 
     # These values are already JSON-compatible; skip FastAPI's conversion walk.
     return ORJSONResponse(
-        {"status": "created", "run_ids": run_ids},
+        {"status": "created", "run_ids": prepared.run_ids},
         status_code=status.HTTP_201_CREATED,
     )
 
@@ -252,8 +267,10 @@ async def get_run(
     db: asyncpg.Connection = Depends(get_db_conn),
     s3: Any = Depends(get_s3_client),
 ):
-    """
-    Get a run by its ID.
+    """Retrieve a run using one S3 range when all fields share an object.
+
+    Older different-object references are read concurrently. Return 404 for an
+    unknown run and 503 for invalid references or unreadable stored data.
     """
     # Fetch run metadata and S3 references, rather than the large JSON fields.
     try:
@@ -283,22 +300,22 @@ async def get_run(
     run_data = dict(row)
 
     # References encode the bucket, object key, byte range, and field name.
-    def parse_s3_ref(ref):
-        if not ref or not ref.startswith("s3://"):
-            return None, None, None, None
-
-        parts = ref.split("/")
-        bucket = parts[2]
-        key = "/".join(parts[3:]).split("#")[0]
-
-        if "#" in ref:
-            offset_part = ref.split("#")[1]
-            if ":" in offset_part and "/" in offset_part:
-                offsets, field = offset_part.split("/")
-                start_offset, end_offset = map(int, offsets.split(":"))
-                return bucket, key, (start_offset, end_offset), field
-
-        return bucket, key, None, None
+    def parse_s3_ref(ref, expected_field):
+        if not isinstance(ref, str) or not ref.startswith("s3://"):
+            raise ValueError("Invalid S3 reference")
+        location, fragment = ref[5:].split("#", 1)
+        bucket, key = location.split("/", 1)
+        offsets, field = fragment.rsplit("/", 1)
+        start_offset, end_offset = map(int, offsets.split(":"))
+        if (
+            not bucket
+            or not key
+            or start_offset < 0
+            or end_offset <= start_offset
+            or field != expected_field
+        ):
+            raise ValueError("Invalid S3 reference")
+        return bucket, key, (start_offset, end_offset), field
 
     async def fetch_range(bucket, key, start, end):
         # Stored end offsets are exclusive; S3 expects an inclusive end byte.
@@ -313,17 +330,12 @@ async def get_run(
 
     async def fetch_field(ref):
         bucket, key, offsets, _ = ref
-        if not bucket or not key or not offsets:
-            return {}
         return orjson.loads(await fetch_range(bucket, key, *offsets))
 
     fields = ("inputs", "outputs", "metadata")
     try:
-        refs = [parse_s3_ref(run_data[field]) for field in fields]
-        if (
-            all(bucket and key and offsets for bucket, key, offsets, _ in refs)
-            and len({(bucket, key) for bucket, key, _, _ in refs}) == 1
-        ):
+        refs = [parse_s3_ref(run_data[field], field) for field in fields]
+        if len({(bucket, key) for bucket, key, _, _ in refs}) == 1:
             # One range covers the three fields without fetching the full batch.
             bucket, key = refs[0][:2]
             start = min(offsets[0] for _, _, offsets, _ in refs)

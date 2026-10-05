@@ -67,9 +67,25 @@ async def storage(client):
         await db.close()
 
 
+async def body_chunks(body):
+    """Fragment requests, including a split inside the test emoji's UTF-8 bytes."""
+    yield body[:1]
+    body = body[1:]
+    split = body.find("🙂".encode())
+    if split >= 0:
+        yield body[: split + 1]
+        body = body[split + 1 :]
+    for start in range(0, len(body), 16 * 1024):
+        yield body[start : start + 16 * 1024]
+
+
 async def assert_roundtrip(client, runs):
     """Create a batch, then retrieve each run and compare its full contents."""
-    response = await client.post("/runs", json=runs)
+    response = await client.post(
+        "/runs",
+        content=body_chunks(orjson.dumps(runs)),
+        headers={"Content-Type": "application/json"},
+    )
     assert response.status_code == 201, response.text
     result = response.json()
     assert result["status"] == "created"
@@ -98,7 +114,7 @@ LARGE = {"text": "x" * (100 * 1024)}
                     for k, v in make_run().items()
                     if k not in ("id", "inputs", "outputs", "metadata")
                 },
-                make_run(),
+                make_run(name="Test Run 🙂"),
             ],
             id="generated-id-and-default-fields",
         ),
@@ -122,7 +138,7 @@ LARGE = {"text": "x" * (100 * 1024)}
 async def test_batch_roundtrip(client, runs):
     """Verify POST/GET preserve IDs and exact field values.
 
-    Cover generated IDs, default fields, varied sizes and repeated content.
+    Cover IDs, defaults, varied sizes and repeated content over fragmented input.
     """
     await assert_roundtrip(client, runs)
 
@@ -141,31 +157,38 @@ VALID_BATCH = orjson.dumps([make_run()])
 
 
 @pytest.mark.parametrize(
-    "body,expected_status",
+    "bodies,expected_status",
     [
-        pytest.param(b"[]", 400, id="empty-batch"),
-        pytest.param(VALID_BATCH[:-1], 422, id="truncated-batch"),
-        pytest.param(b"{}", 422, id="non-array-root"),
+        pytest.param([b"[]"], 400, id="empty-batch"),
         pytest.param(
-            orjson.dumps([make_run(), {"name": "Invalid"}]),
+            [VALID_BATCH[:-1], VALID_BATCH + b" extra", VALID_BATCH[:-1] + b",]"],
+            422,
+            id="malformed-batch",
+        ),
+        pytest.param([b"{}"], 422, id="non-array-root"),
+        pytest.param(
+            [orjson.dumps([make_run(), {"name": "Invalid"}])],
             422,
             id="invalid-run-after-valid-run",
         ),
     ],
 )
-async def test_rejected_batch_writes_nothing(client, storage, body, expected_status):
+async def test_rejected_batch_writes_nothing(client, storage, bodies, expected_status):
     """Reject empty, malformed or invalid batches with the expected HTTP error.
 
     Neither database rows nor S3 object keys should change after rejection.
     """
     before = await storage_snapshot(*storage)
-    response = await client.post(
-        "/runs", content=body, headers={"Content-Type": "application/json"}
-    )
-    assert response.status_code == expected_status, response.text
-    if expected_status == 422:
-        assert response.json()["detail"]
-    assert await storage_snapshot(*storage) == before
+    for body in bodies:
+        response = await client.post(
+            "/runs",
+            content=body_chunks(body),
+            headers={"Content-Type": "application/json"},
+        )
+        assert response.status_code == expected_status, response.text
+        if expected_status == 422:
+            assert response.json()["detail"]
+        assert await storage_snapshot(*storage) == before
 
 
 @pytest.mark.parametrize("duplicate", ["existing-id", "within-batch"])
@@ -195,15 +218,54 @@ async def test_failed_batch_rolls_back(client, storage, duplicate):
 
 
 async def test_missing_runs_and_objects(client, storage):
-    """Return 422 for invalid IDs, 404 for unknown runs and 503 for missing data."""
+    """Check ID errors, legacy reads, and 503 for invalid or missing stored data."""
     db, s3 = storage
     assert (await client.get("/runs/not-a-uuid")).status_code == 422
     assert (await client.get(f"/runs/{uuid.uuid4()}")).status_code == 404
     run = make_run(inputs={"prompt": "hello"}, outputs={"answer": "world"})
     await assert_roundtrip(client, [run])
-    reference = await db.fetchval(
-        "SELECT inputs FROM runs WHERE id = $1", uuid.UUID(run["id"])
+    run_id = uuid.UUID(run["id"])
+    references = await db.fetchrow(
+        "SELECT inputs, outputs FROM runs WHERE id = $1", run_id
     )
+    reference = references["inputs"]
+    location = reference.split("#", 1)[0]
+    # Invalid references must not become successful responses with empty fields.
+    for invalid in (
+        None,
+        "",
+        "not-an-s3-reference",
+        location,
+        f"{location}#bad:2/inputs",
+        f"{location}#-1:2/inputs",
+        f"{location}#2:2/inputs",
+        f"{location}#3:2/inputs",
+        f"{location}#0:2/outputs",
+    ):
+        await db.execute("UPDATE runs SET inputs = $1 WHERE id = $2", invalid, run_id)
+        response = await client.get(f"/runs/{run['id']}")
+        assert response.status_code == 503, response.text
+        assert response.json() == {"detail": "Stored run data is unavailable"}
+    await db.execute("UPDATE runs SET inputs = $1 WHERE id = $2", reference, run_id)
+
+    # An older run can store a field in a different S3 object.
+    legacy_key = f"legacy/{run['id']}.json"
+    legacy_data = orjson.dumps(run["outputs"])
+    await s3.put_object(
+        Bucket=settings.S3_BUCKET_NAME, Key=legacy_key, Body=legacy_data
+    )
+    legacy_ref = (
+        f"s3://{settings.S3_BUCKET_NAME}/{legacy_key}#0:{len(legacy_data)}/outputs"
+    )
+    await db.execute("UPDATE runs SET outputs = $1 WHERE id = $2", legacy_ref, run_id)
+    response = await client.get(f"/runs/{run['id']}")
+    assert response.status_code == 200, response.text
+    assert response.json() == run
+    await db.execute(
+        "UPDATE runs SET outputs = $1 WHERE id = $2", references["outputs"], run_id
+    )
+    await s3.delete_object(Bucket=settings.S3_BUCKET_NAME, Key=legacy_key)
+
     key = reference.split("#", 1)[0].split("/", 3)[3]
     # Keep the database row but remove its object to simulate missing stored data.
     await s3.delete_object(Bucket=settings.S3_BUCKET_NAME, Key=key)

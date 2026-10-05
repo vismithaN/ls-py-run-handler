@@ -2,14 +2,18 @@
 
 import codecs
 import json
+from collections.abc import AsyncIterator
+from typing import Any
 
 from fastapi import HTTPException, Request
 from fastapi.exceptions import RequestValidationError
 
-CHUNK_BYTES = 256 * 1024
+DECODE_CHUNK_BYTES = 256 * 1024
+READ_AHEAD_MIN_CHARS = 256 * 1024
+READ_AHEAD_MAX_CHARS = 512 * 1024
 
 
-def json_error(message, position):
+def json_error(message: str, position: int) -> RequestValidationError:
     """Build a JSON-validation exception at the given character offset."""
     return RequestValidationError(
         [
@@ -24,14 +28,14 @@ def json_error(message, position):
     )
 
 
-async def text_chunks(request: Request):
+async def text_chunks(request: Request) -> AsyncIterator[str]:
     """Yield request text using incremental UTF-8/16/32 decoding."""
     prefix = bytearray()
     decoder = None
     async for chunk in request.stream():
         # Limit each decoding step even if the server provides a larger chunk.
-        for start in range(0, len(chunk), CHUNK_BYTES):
-            part = memoryview(chunk)[start : start + CHUNK_BYTES]
+        for start in range(0, len(chunk), DECODE_CHUNK_BYTES):
+            part = memoryview(chunk)[start : start + DECODE_CHUNK_BYTES]
             if decoder is None:
                 # Inspect four bytes to distinguish UTF-8/16/32 encodings.
                 prefix.extend(part)
@@ -62,8 +66,12 @@ async def text_chunks(request: Request):
     yield decoder.decode(b"", final=True)
 
 
-async def json_array_items(request: Request):
-    """Yield array items incrementally; exhaust the iterator to validate all input."""
+async def json_array_items(request: Request) -> AsyncIterator[Any]:
+    """Yield JSON array items; exhaust the iterator to validate the entire body.
+
+    Syntax errors raise validation errors; decoding failures raise HTTP 400.
+    Chunk/read-ahead limits do not cap the total buffer or request size.
+    """
     chunks = text_chunks(request).__aiter__()
     # Keep unconsumed text; offset tracks its position in the original body.
     buffer = ""
@@ -72,7 +80,7 @@ async def json_array_items(request: Request):
     decoder = json.JSONDecoder()
     read_hint = 0
 
-    async def read_more():
+    async def read_more() -> bool:
         """Append a text chunk, returning False at EOF."""
         nonlocal buffer, finished
         try:
@@ -84,13 +92,13 @@ async def json_array_items(request: Request):
         except (UnicodeError, ValueError, RecursionError) as error:
             raise HTTPException(400, "There was an error parsing the body") from error
 
-    def consume(count):
+    def consume(count: int) -> None:
         """Drop decoded characters and advance the absolute error offset."""
         nonlocal buffer, offset
         buffer = buffer[count:]
         offset += count
 
-    async def skip_space():
+    async def skip_space() -> None:
         """Consume JSON whitespace, fetching more text as needed."""
         while True:
             consume(len(buffer) - len(buffer.lstrip(" \t\r\n")))
@@ -162,7 +170,11 @@ async def json_array_items(request: Request):
                     separator += 1
                 if separator < len(buffer) and buffer[separator] in ",]":
                     # Use this item's character length as a capped read-ahead hint.
-                    read_hint = min(end, 2 * CHUNK_BYTES) if end > CHUNK_BYTES else 0
+                    read_hint = (
+                        min(end, READ_AHEAD_MAX_CHARS)
+                        if end > READ_AHEAD_MIN_CHARS
+                        else 0
+                    )
                     break
                 # More bytes may complete a number, whitespace or delimiter.
                 del value
