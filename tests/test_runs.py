@@ -16,6 +16,7 @@ pytestmark = pytest.mark.asyncio
 
 
 def make_run(**fields):
+    """Build a valid run, with overrides for the scenario being tested."""
     return {
         "id": str(uuid.uuid4()),
         "trace_id": str(uuid.uuid4()),
@@ -29,12 +30,14 @@ def make_run(**fields):
 
 @pytest_asyncio.fixture
 async def client():
+    """Send requests directly to the app, using only dedicated test storage."""
     assert settings.DB_NAME == "postgres_test" or settings.DB_NAME.startswith(
         "postgres_test_"
     ), "Use a dedicated test database"
     assert settings.S3_BUCKET_NAME == "runs-test" or settings.S3_BUCKET_NAME.startswith(
         "runs-test-"
     ), "Use a dedicated test bucket"
+    # Return HTTP 500 responses so failed-batch tests can inspect them.
     transport = ASGITransport(app=app, raise_app_exceptions=False)
     async with AsyncClient(transport=transport, base_url="http://test") as client:
         yield client
@@ -65,6 +68,7 @@ async def storage(client):
 
 
 async def assert_roundtrip(client, runs):
+    """Create a batch, then retrieve each run and compare its full contents."""
     response = await client.post("/runs", json=runs)
     assert response.status_code == 201, response.text
     result = response.json()
@@ -116,10 +120,15 @@ LARGE = {"text": "x" * (100 * 1024)}
     ],
 )
 async def test_batch_roundtrip(client, runs):
+    """Verify POST/GET preserve IDs and exact field values.
+
+    Cover generated IDs, default fields, varied sizes and repeated content.
+    """
     await assert_roundtrip(client, runs)
 
 
 async def storage_snapshot(db, s3):
+    """Record row count and object keys to detect writes from rejected requests."""
     keys = set()
     async for page in s3.get_paginator("list_objects_v2").paginate(
         Bucket=settings.S3_BUCKET_NAME
@@ -145,6 +154,10 @@ VALID_BATCH = orjson.dumps([make_run()])
     ],
 )
 async def test_rejected_batch_writes_nothing(client, storage, body, expected_status):
+    """Reject empty, malformed or invalid batches with the expected HTTP error.
+
+    Neither database rows nor S3 object keys should change after rejection.
+    """
     before = await storage_snapshot(*storage)
     response = await client.post(
         "/runs", content=body, headers={"Content-Type": "application/json"}
@@ -157,6 +170,10 @@ async def test_rejected_batch_writes_nothing(client, storage, body, expected_sta
 
 @pytest.mark.parametrize("duplicate", ["existing-id", "within-batch"])
 async def test_failed_batch_rolls_back(client, storage, duplicate):
+    """Reject the whole batch when an ID duplicates an existing or incoming run.
+
+    Preserve existing data and allow a subsequent valid request to succeed.
+    """
     db, _ = storage
     existing = make_run()
     await assert_roundtrip(client, [existing])
@@ -178,6 +195,7 @@ async def test_failed_batch_rolls_back(client, storage, duplicate):
 
 
 async def test_missing_runs_and_objects(client, storage):
+    """Return 422 for invalid IDs, 404 for unknown runs and 503 for missing data."""
     db, s3 = storage
     assert (await client.get("/runs/not-a-uuid")).status_code == 422
     assert (await client.get(f"/runs/{uuid.uuid4()}")).status_code == 404
@@ -187,6 +205,7 @@ async def test_missing_runs_and_objects(client, storage):
         "SELECT inputs FROM runs WHERE id = $1", uuid.UUID(run["id"])
     )
     key = reference.split("#", 1)[0].split("/", 3)[3]
+    # Keep the database row but remove its object to simulate missing stored data.
     await s3.delete_object(Bucket=settings.S3_BUCKET_NAME, Key=key)
     response = await client.get(f"/runs/{run['id']}")
     assert response.status_code == 503, response.text
