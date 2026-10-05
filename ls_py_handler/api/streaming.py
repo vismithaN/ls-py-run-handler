@@ -1,10 +1,4 @@
-"""Decode a request's JSON array incrementally for batch ingestion.
-
-The parser yields individual JSON values to the route for model validation and
-encoding, avoiding a complete decoded input list. It handles text encoding,
-array delimiters, and request-validation errors without accessing storage.
-Chunked decoding does not impose a maximum request size or total memory limit.
-"""
+"""Parse request JSON arrays incrementally without retaining the decoded list."""
 
 import codecs
 import json
@@ -16,16 +10,7 @@ CHUNK_BYTES = 256 * 1024
 
 
 def json_error(message, position):
-    """Build a FastAPI JSON-validation exception at a decoded character offset.
-
-    Args:
-        message: Description of the JSON syntax error.
-        position: Absolute character offset in the decoded request body.
-
-    Returns:
-        A RequestValidationError for the caller to raise, using the same error
-        structure as FastAPI's JSON-body validation.
-    """
+    """Build a JSON-validation exception at the given character offset."""
     return RequestValidationError(
         [
             {
@@ -40,23 +25,7 @@ def json_error(message, position):
 
 
 async def text_chunks(request: Request):
-    """Yield decoded text while preserving characters split across byte chunks.
-
-    Detect UTF-8, UTF-16, or UTF-32 from the initial bytes and use an incremental
-    decoder to handle partial characters. Each incoming ASGI chunk is processed
-    in pieces of at most CHUNK_BYTES bytes; the final decode checks for incomplete
-    characters. The upstream server may already hold a larger incoming chunk.
-
-    Args:
-        request: Request whose body stream has not yet been consumed.
-
-    Yields:
-        Decoded text fragments, which may be empty while characters are buffered.
-
-    Raises:
-        RequestValidationError: The request body is empty.
-        UnicodeError: Body bytes contain malformed or incomplete encoded text.
-    """
+    """Yield request text using incremental UTF-8/16/32 decoding."""
     prefix = bytearray()
     decoder = None
     async for chunk in request.stream():
@@ -89,29 +58,7 @@ async def text_chunks(request: Request):
 
 
 async def json_array_items(request: Request):
-    """Yield JSON array items without constructing the full decoded input list.
-
-    Accumulate text until an item and its following delimiter can be decoded,
-    then discard the consumed text and yield that item. For large items, use the
-    previous item's decoded length as a read-ahead hint, capped at 2 * CHUNK_BYTES
-    characters, to reduce repeated parsing attempts. This hint is not a size limit:
-    a single item can still require a large buffer.
-
-    The caller validates each item's Run schema and must exhaust this generator
-    before writing to storage: a later item, missing closing bracket, or trailing
-    content can still invalidate a batch after earlier items have been yielded.
-    Non-array bodies use a full-body error path to preserve validation behavior.
-
-    Args:
-        request: Request containing the JSON array to decode.
-
-    Yields:
-        Individual decoded JSON values in their original array order.
-
-    Raises:
-        RequestValidationError: Missing body, invalid JSON, or a non-array root.
-        HTTPException: Text decoding or parser limits prevent body parsing (400).
-    """
+    """Yield array items incrementally; exhaust the iterator to validate all input."""
     chunks = text_chunks(request).__aiter__()
     buffer = ""
     offset = 0
@@ -120,7 +67,7 @@ async def json_array_items(request: Request):
     read_hint = 0
 
     async def read_more():
-        """Append the next text chunk; return False and mark EOF when exhausted."""
+        """Append a text chunk, returning False at EOF."""
         nonlocal buffer, finished
         try:
             buffer += await anext(chunks)
@@ -138,7 +85,7 @@ async def json_array_items(request: Request):
         offset += count
 
     async def skip_space():
-        """Discard JSON whitespace, reading more text when the buffer is empty."""
+        """Consume JSON whitespace, fetching more text as needed."""
         while True:
             consume(len(buffer) - len(buffer.lstrip(" \t\r\n")))
             if buffer or finished:
