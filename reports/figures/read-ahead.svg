@@ -6,9 +6,9 @@
 <text x="30" y="65" font-family="Arial, sans-serif" font-size="14" fill="#56657a" font-weight="400">3 original suites per version. Historical candidate also changed GET decoding, later reverted.</text>
 <text x="30" y="113" font-family="Arial, sans-serif" font-size="18" fill="#17243a" font-weight="700">POST request median</text>
 <text x="30" y="135" font-family="Arial, sans-serif" font-size="13" fill="#56657a" font-weight="400">ms</text>
-<rect x="30" y="149" width="10" height="10" fill="#94a3b8"/>
+<rect x="30" y="149" width="10" height="10" fill="#dc2626"/>
 <text x="46" y="159" font-family="Arial, sans-serif" font-size="12" fill="#17243a" font-weight="400">Incremental-parser control</text>
-<rect x="640" y="149" width="10" height="10" fill="#00838d"/>
+<rect x="640" y="149" width="10" height="10" fill="#16a34a"/>
 <text x="656" y="159" font-family="Arial, sans-serif" font-size="12" fill="#17243a" font-weight="400">Size-guided JSON read-ahead</text>
 <line x1="300" y1="178" x2="300" y2="334" stroke="#e1e7ef"/>
 <text x="294" y="354" font-family="Arial, sans-serif" font-size="12" fill="#56657a" font-weight="400">0</text>
@@ -21,15 +21,14 @@
 <line x1="1170" y1="178" x2="1170" y2="334" stroke="#e1e7ef"/>
 <text x="1164" y="354" font-family="Arial, sans-serif" font-size="12" fill="#56657a" font-weight="400">400</text>
 <text x="30" y="189" font-family="Arial, sans-serif" font-size="14" fill="#17243a" font-weight="400">POST 500 x 10 KB</text>
-<rect x="300" y="177" width="724.489" height="17" fill="#94a3b8"/>
+<rect x="300" y="177" width="724.489" height="17" fill="#dc2626"/>
 <text x="1031.49" y="191" font-family="Arial, sans-serif" font-size="13" fill="#17243a" font-weight="400">333.099</text>
-<rect x="300" y="201" width="758.679" height="17" fill="#bb5b34"/>
+<rect x="300" y="201" width="758.679" height="17" fill="#16a34a"/>
 <text x="1065.68" y="215" font-family="Arial, sans-serif" font-size="13" fill="#17243a" font-weight="400">348.818</text>
 <text x="30" y="267" font-family="Arial, sans-serif" font-size="14" fill="#17243a" font-weight="400">POST 50 x 100 KB</text>
-<rect x="300" y="255" width="795.242" height="17" fill="#94a3b8"/>
+<rect x="300" y="255" width="795.242" height="17" fill="#dc2626"/>
 <text x="1102.24" y="269" font-family="Arial, sans-serif" font-size="13" fill="#17243a" font-weight="400">365.629</text>
-<rect x="300" y="279" width="676.389" height="17" fill="#00838d"/>
+<rect x="300" y="279" width="676.389" height="17" fill="#16a34a"/>
 <text x="983.389" y="293" font-family="Arial, sans-serif" font-size="13" fill="#17243a" font-weight="400">310.983</text>
 <text x="30" y="381" font-family="Arial, sans-serif" font-size="12" fill="#56657a" font-weight="400">POST 50 median -14.9%; POST 500 +4.7%. No uniform latency win.</text>
-<text x="30" y="422" font-family="Arial, sans-serif" font-size="12" fill="#56657a" font-weight="400">Brown bars mark increases in lower-is-better metrics.</text>
 </svg>

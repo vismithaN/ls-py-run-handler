@@ -65,7 +65,7 @@ latency improvement.
 | GET one run × 10 KB per field | 88.2 ms | 38.4 ms | 56.5% |
 | GET one run × 100 KB per field | 95.2 ms | 42.5 ms | 55.4% |
 
-![Original baseline and final request medians](reports/figures/final-latency.png)
+![Optimization report: Latency](reports/figures/final-latency.png)
 
 The baseline is **one saved benchmark suite**. Final values are the median
 of three suite medians from the final benchmark run.
@@ -166,7 +166,7 @@ The baseline reports showed:
 | Memray memory profile | Full-batch serialization allocations at peak | 32.000 MiB | 32.000 MiB |
 | Memray memory profile | Run-dictionary construction allocations at peak | 5.673 MiB | 3.715 MiB |
 
-Source: [baseline CPU and memory tables](reports/interpretations/baseline.json),
+**Source.** [baseline CPU and memory tables](reports/interpretations/baseline.json),
 including the named recordings and their hashes. CPU rows are from one cold
 capture per workload; memory rows are live allocation groups at the whole-test
 peak, not server RAM.
@@ -204,21 +204,18 @@ The object remains a JSON array and the database schema remains unchanged.
 
 ![First improvement: One-pass batch encoding](reports/figures/one-pass.png)
 
-**Why I attribute the improvement to this change.** The identified expensive
-operation disappears from the profile, the data still round-trips, and both
-POST timings and CPU move in the expected direction. This is stronger evidence
-than a faster benchmark alone.
+**Why I attribute the improvement to this change.** Recording offsets during
+encoding eliminated the repeated `bytes.find()` searches across the completed
+batch. The CPU profiles confirm that these calls fell from 1,500 to zero for
+POST 500 and from 150 to zero for POST 50. Correctness tests still retrieve the
+same data, while measured POST latency and CPU both decrease. This links the
+improvement to removal of the measured search work, rather than relying only
+on a faster benchmark.
 
-**Measurement limit.** I ran one benchmark suite before the change and one
-after. Each suite repeated requests, but I did not repeat the full before/after
-comparison. These results show an improvement; more runs would be needed to
-confirm the exact percentage. This change targets POST, so I do not attribute
-any GET timing changes to it.
-
-**Code trade-off.** Instead of serializing the whole batch at once, the code
-serializes and writes fields individually. This removes the expensive searches,
-but the many small buffer writes also take time. Other batch sizes and field
-sizes may see different benefits.
+**Code trade-off.** Small buffer writes replace the repeated `bytes.find()`
+searches. Their added overhead was outweighed by the search savings: cold
+first-request CPU fell 59.1% for POST 500 and 29.6% for POST 50. I kept this
+trade-off because it reduced total CPU and latency while preserving correctness.
 
 **Decision: retained.** The mechanism and substantial measured change justify
 the extra offset-recording logic without a schema migration.
@@ -229,15 +226,21 @@ Evidence: [one-pass interpretation](reports/interpretations/one-pass-encoder.jso
 
 **Problem found.** After one-pass encoding, SDK setup remained a visible cost:
 
-| Report after one-pass encoding | Measured work / allocation | POST 500 × 10 KB | POST 50 × 100 KB |
-|---|---|---:|---:|
-| Yappi CPU profile | `get_s3_client` inclusive CPU, one call | 0.166570 s | 0.161998 s |
-| Memray memory profile | S3 SDK / data allocations at peak | 43.043 MiB | 26.917 MiB |
+![POST CPU profile tables with the S3 client dependency rows outlined in red](reports/figures/s3-setup-profile-highlight.png)
 
-Source: [one-pass CPU and memory tables](reports/interpretations/one-pass-encoder.json).
+*After removing batch searches, S3 client setup remained a visible CPU cost.*
+
+Memray also attributed 43.043 MiB (POST 500) and 26.917 MiB (POST 50) at peak
+to S3 SDK / data allocations.
+
+**Source.** [one-pass CPU and memory tables](reports/interpretations/one-pass-encoder.json).
 The CPU row includes the dependency's callees; the memory group includes SDK
-data handling, not just session construction. Neither isolates `get_session()`,
-so session reuse was a hypothesis to test, not an already-proven cause.
+data handling, not just session construction. These measurements do not isolate
+the cost of `get_session()`.
+
+**Hypothesis.** Reusing the SDK session could avoid repeated setup work and
+reduce CPU and latency for both POST and GET. Clients would remain
+request-scoped, so this would not reuse network connections.
 
 **Change.** Cache `get_s3_session()` with `lru_cache(maxsize=1)` and use it from
 startup and the request dependency. Every request still creates an S3 client
@@ -252,24 +255,45 @@ shared connection lifetime, shutdown/recovery handling or a client tied to an
 event loop. The supplied benchmark changes event loops between executions.
 An application-lifetime client is a different experiment and was deferred.
 
+**CPU results: the same S3 client dependency before and after.**
+
+| Workload | CPU before reuse (s) | CPU after reuse (s) | Observed reduction |
+|---|---:|---:|---:|
+| POST 500 × 10 KB | 0.166570 | 0.032299 | 80.6% |
+| POST 50 × 100 KB | 0.161998 | 0.033313 | 79.4% |
+| GET 10 KB | 0.164797 | 0.032747 | 80.1% |
+| GET 100 KB | 0.162442 | 0.032676 | 79.9% |
+
+Both columns measure inclusive CPU time in `get_s3_client()`, including its
+callees. These are session-1 cold-profile observations, not whole-request CPU
+or elapsed request time. Sources: [before reuse](reports/interpretations/one-pass-encoder.json)
+and [after reuse](reports/interpretations/s3-session-reuse.json).
+
+**Latency results: the complete API request before and after.**
+
 I ran three benchmark suites with session reuse enabled and three with it
 disabled, varying the execution order. The table shows the median of the three
-suite medians for each version.
+suite medians for each version. These unprofiled elapsed times include parsing,
+storage waits and response handling—not just S3 setup CPU.
 
-| Workload | Reuse disabled | Reuse enabled | Interpretation |
+| Workload | Latency before reuse (ms) | Latency after reuse (ms) | Interpretation |
 |---|---:|---:|---|
-| POST 500 × 10 KB | 590.7 ms | 554.2 ms | Favorable direction, but noisy |
-| POST 50 × 100 KB | 380.1 ms | 348.7 ms | Favorable direction, but noisy |
-| GET 10 KB | 87.8 ms | 41.1 ms | 53.2% lower; separated repeat ranges |
-| GET 100 KB | 91.4 ms | 47.5 ms | 48.0% lower; separated repeat ranges |
+| POST 500 × 10 KB | 590.7 | 554.2 | 6.2% lower median; noisy repeats |
+| POST 50 × 100 KB | 380.1 | 348.7 | 8.3% lower median; noisy repeats |
+| GET 10 KB | 87.8 | 41.1 | 53.2% lower; separated repeat ranges |
+| GET 100 KB | 91.4 | 47.5 | 48.0% lower; separated repeat ranges |
 
 ![Second improvement: S3 SDK session reuse](reports/figures/session-reuse.png)
 
-**Supporting evidence.** POST-500 `get_s3_client` inclusive CPU changed from
-about **0.167 to 0.032 s**. The tests verify that only the session is reused,
-including parallel requests. Diagnostics show **no connection/request-count
-reduction**: POST remains one S3 PUT/new connection; GET remained three reads/new
-connections at this stage.
+**Interpretation.** The profiles show less CPU work in the S3 client dependency.
+The separate benchmarks show a clear GET latency improvement, but the POST
+results are noisy. Lower dependency CPU does not imply the same percentage
+reduction in complete request latency.
+
+**Correctness and connection counts.** Tests verify that only the session is
+reused, including parallel requests. Diagnostics show no reduction in storage
+request or connection counts: POST remains one S3 PUT/new connection; GET
+remained three reads/new connections at this stage.
 
 **Limits.** Some SDK allocations move to startup or an earlier test, outside a
 later Memray capture. Lower tracked peaks therefore do not establish equal
@@ -295,7 +319,7 @@ that CPU profiling alone could not quantify as elapsed waiting time:
 | INSERT calls per request | 500 | 50 |
 | Median database-write elapsed time | 226.621 ms | 23.572 ms |
 
-Source: [COPY evidence](reports/interpretations/bulk-postgres-writes.json),
+**Source.** [COPY evidence](reports/interpretations/bulk-postgres-writes.json),
 `before-diagnostic`: 15 measured requests per workload across three sessions.
 These are instrumented phase timings, not Yappi CPU seconds or the original
 benchmark's request latency.
@@ -364,19 +388,22 @@ payload representations alive at the test peak:
 | Model validation | 9.673 MiB | 3.715 MiB |
 | Outgoing batch buffer | 16.498 MiB | 16.550 MiB |
 
-Source: [post-COPY memory breakdown](reports/interpretations/bulk-postgres-writes.json).
+**Source.** [post-COPY memory breakdown](reports/interpretations/bulk-postgres-writes.json).
 These are selected groups from the same whole-test peak, not the complete
 allocation total or worker RSS. They showed why input decoding/model lifetime
 was worth testing, even after latency improved.
 
 I first tried smaller copying/lifetime changes. Their modest or inconsistent
-benefits are recorded in section 9. The useful next hypothesis was to stop
-materializing **all incoming runs at once**, not just shorten one variable's
-lifetime.
+benefits are recorded in section 9.
+
+**Hypothesis.** Parsing, validating and encoding one run at a time should allow
+its decoded data and model to be released before processing the next run. This
+should reduce POST peak memory without changing the storage format or GET.
+Incremental parsing could add CPU work, so POST latency must also be checked.
 
 ### What changed
 
-The request dependency now:
+**Change.** The request dependency now:
 
 1. Reads incoming text in chunks, with a **256 KiB maximum chunk size**.
 2. Decodes the next array item with the standard JSON decoder.
@@ -479,7 +506,7 @@ showed repeated decoding attempts:
 | `JSONDecoder.raw_decode` | 123 | 0.080644 s | 0.089092 s |
 | `JSONDecodeError.__init__` | 66 | 0.000337 s | 0.008448 s |
 
-Source: [incremental-parser CPU table](reports/interpretations/incremental-post-parsing.json),
+**Source.** [incremental-parser CPU table](reports/interpretations/incremental-post-parsing.json),
 session 1. This cold capture also includes SDK JSON decoding; 123 is not a
 pure per-run parser count, and inclusive rows overlap. The incomplete-input
 retries and the parser code motivated reducing repeated attempts—not just
@@ -532,7 +559,7 @@ and [final-results interpretation](reports/interpretations/frozen-final.json).
 | S3 GET attempts per request | 3 | 3 |
 | New S3 TCP connections per request | 3 | 3 |
 
-Source: [one-range experiment](reports/interpretations/one-s3-read.json),
+**Source.** [one-range experiment](reports/interpretations/one-s3-read.json),
 `diagnostic-before`: three sessions of five requests per workload. The reads
 were concurrent, not three sequential network waits.
 
@@ -573,7 +600,7 @@ those values again with `jsonable_encoder` before serializing the response:
 | `jsonable_encoder` calls | 631 | 6,157 |
 | Inclusive CPU in `jsonable_encoder` | 0.014963 s | 0.131431 s |
 
-Source: [GET-encoding experiment](reports/interpretations/get-response-encoding.json),
+**Source.** [GET-encoding experiment](reports/interpretations/get-response-encoding.json),
 `before-cpu-get-10kb-s1` and `before-cpu-get-100kb-s1`. These are single cold
 captures; inclusive CPU includes callees and is not unprofiled request latency.
 
@@ -777,9 +804,10 @@ reports or change the measured application's behavior.
 
 The draft's static figures are self-contained PNG/SVG assets. Their numbers and
 repeat arrays are in [data.json](reports/figures/data.json), with the paths,
-byte sizes and SHA-256 hashes of the 18 input documents used to build them.
+byte sizes and SHA-256 hashes of the 19 input documents used to build them.
 The charts show summary bars without individual repeat markers; all bar axes
-start at zero. Brown bars make regressions visible.
+start at zero. Red shades show baseline/control versions; green shows the
+changed version. The bar values—not the colors—indicate improvement or regression.
 
 SVG figures can be regenerated without application dependencies:
 

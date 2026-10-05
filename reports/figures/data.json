@@ -5,6 +5,11 @@
   "repeat_definition": "Sample arrays contain independent suite medians or capture peaks used to calculate bar values.",
   "sources": [
     {
+      "path": "reports/interpretations/s3-session-reuse.json",
+      "sha256": "5a5218a366e7cf437354defd956588b197987141a1ec43ce5036c596817760ae",
+      "size_bytes": 18942
+    },
+    {
       "path": "reports/interpretations/baseline.json",
       "sha256": "5a4910fcce835e0a5e2e725eb1ac613adecb14660c3b7054a42a05374b07399e",
       "size_bytes": 20715
@@ -98,7 +103,8 @@
   "figures": [
     {
       "id": "final-latency",
-      "title": "Original baseline to final: latency",
+      "title": "Optimization report: Latency",
+      "show_annotations": false,
       "scope": "Original unprofiled benchmarks. Baseline: 1 suite; final: median of 3 suite medians.",
       "panels": [
         {
@@ -410,8 +416,74 @@
     {
       "id": "session-reuse",
       "title": "Second improvement: S3 SDK session reuse",
-      "scope": "Original benchmarks: 3 suites per version, with session reuse enabled or disabled; execution order varied.",
+      "scope": "CPU: one cold capture per workload/version. Latency: median of 3 benchmark suite medians per version.",
       "panels": [
+        {
+          "title": "GET CPU: get_s3_client",
+          "unit": "CPU seconds (inclusive)",
+          "legend": [
+            "Session reuse disabled",
+            "Session reuse enabled"
+          ],
+          "rows": [
+            {
+              "label": "GET 10 KB",
+              "values": [
+                0.164797,
+                0.032747
+              ],
+              "samples": [
+                [],
+                []
+              ]
+            },
+            {
+              "label": "GET 100 KB",
+              "values": [
+                0.162442,
+                0.032676
+              ],
+              "samples": [
+                [],
+                []
+              ]
+            }
+          ],
+          "note": "Session-1 cold profiles: same function before/after, including callees."
+        },
+        {
+          "title": "POST CPU: get_s3_client",
+          "unit": "CPU seconds (inclusive)",
+          "legend": [
+            "Session reuse disabled",
+            "Session reuse enabled"
+          ],
+          "rows": [
+            {
+              "label": "POST 500 x 10 KB",
+              "values": [
+                0.16657,
+                0.032299
+              ],
+              "samples": [
+                [],
+                []
+              ]
+            },
+            {
+              "label": "POST 50 x 100 KB",
+              "values": [
+                0.161998,
+                0.033313
+              ],
+              "samples": [
+                [],
+                []
+              ]
+            }
+          ],
+          "note": "Session-1 cold profiles: same function before/after, including callees."
+        },
         {
           "title": "GET request median",
           "unit": "ms",

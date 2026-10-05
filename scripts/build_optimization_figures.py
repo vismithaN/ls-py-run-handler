@@ -15,7 +15,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 OUTPUT = ROOT / "reports" / "figures"
-COLORS = ("#94a3b8", "#00838d")
+COLORS = ("#dc2626", "#16a34a")
 TEXT = "#17243a"
 MUTED = "#56657a"
 
@@ -96,25 +96,30 @@ def axis_limit(value):
 
 def render(figure, png):
     panels = figure["panels"]
+    show_annotations = figure.get("show_annotations", True)
     columns = min(2, len(panels))
     width = 1280
     panel_width = (width - 60) / columns
     group_height = 30 + 24 * max(len(panel["legend"]) for panel in panels)
-    panel_height = 160 + group_height * max(len(panel["rows"]) for panel in panels)
-    height = 118 + math.ceil(len(panels) / columns) * panel_height
+    panel_height = (160 if show_annotations else 100) + group_height * max(
+        len(panel["rows"]) for panel in panels
+    )
+    header_height = 118 if show_annotations else 85
+    height = header_height + math.ceil(len(panels) / columns) * panel_height
     canvas = Canvas(width, height, png)
     canvas.parts.append(f'<title>{html.escape(figure["title"])}</title>')
     canvas.parts.append(f'<desc>{html.escape(figure["scope"])}</desc>')
     canvas.text(30, 38, figure["title"], 24, bold=True)
-    for index, line in enumerate(textwrap.wrap(figure["scope"], 150)):
-        canvas.text(30, 65 + index * 19, line, 14, MUTED)
+    if show_annotations:
+        for index, line in enumerate(textwrap.wrap(figure["scope"], 150)):
+            canvas.text(30, 65 + index * 19, line, 14, MUTED)
     for index, panel in enumerate(panels):
         left = 30 + (index % columns) * panel_width
-        top = 113 + (index // columns) * panel_height
+        top = header_height - 5 + (index // columns) * panel_height
         canvas.text(left, top, panel["title"], 18, bold=True)
         canvas.text(left, top + 22, panel["unit"], 13, MUTED)
         colors = (
-            COLORS if len(panel["legend"]) == 2 else (COLORS[0], "#4e69a6", COLORS[1])
+            COLORS if len(panel["legend"]) == 2 else (COLORS[0], "#f87171", COLORS[1])
         )
         for item, label in enumerate(panel["legend"]):
             canvas.rect(
@@ -123,10 +128,7 @@ def render(figure, png):
             canvas.text(
                 left + 16 + item * panel_width / len(colors), top + 46, label, 12
             )
-        maximum = axis_limit(
-            max(max(row["values"]) for row in panel["rows"])
-            * 1.05
-        )
+        maximum = axis_limit(max(max(row["values"]) for row in panel["rows"]) * 1.05)
         start = left + (270 if columns == 1 else 180)
         plot_width = panel_width - (350 if columns == 1 else 250)
         bottom = top + 65 + len(panel["rows"]) * group_height
@@ -143,23 +145,14 @@ def render(figure, png):
             for series, value in enumerate(row["values"]):
                 bar_y = y - 12 + series * 24
                 bar_width = value / maximum * plot_width
-                color = colors[series]
-                if series == len(colors) - 1 and value > row["values"][0] * 1.01:
-                    color = "#bb5b34"
-                canvas.rect(start, bar_y, bar_width, 17, color)
+                canvas.rect(start, bar_y, bar_width, 17, colors[series])
                 label_x = start + bar_width + 7
                 canvas.text(label_x, bar_y + 14, number(value), 13)
-        for line, note in enumerate(
-            textwrap.wrap(panel["note"], 80 if columns == 2 else 155)
-        ):
-            canvas.text(left, bottom + 47 + line * 18, note, 12, MUTED)
-    canvas.text(
-        30,
-        height - 12,
-        "Brown bars mark increases in lower-is-better metrics.",
-        12,
-        MUTED,
-    )
+        if show_annotations:
+            for line, note in enumerate(
+                textwrap.wrap(panel["note"], 80 if columns == 2 else 155)
+            ):
+                canvas.text(left, bottom + 47 + line * 18, note, 12, MUTED)
     canvas.save(figure["id"])
 
 

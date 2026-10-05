@@ -6,11 +6,11 @@
 <text x="30" y="65" font-family="Arial, sans-serif" font-size="14" fill="#56657a" font-weight="400">Linux/ARM64, 1 Uvicorn worker, 1 vCPU, 1 GiB, no swap or profiler; real HTTP.</text>
 <text x="30" y="113" font-family="Arial, sans-serif" font-size="18" fill="#17243a" font-weight="700">Absolute peak API-worker RSS</text>
 <text x="30" y="135" font-family="Arial, sans-serif" font-size="13" fill="#56657a" font-weight="400">MiB</text>
-<rect x="30" y="149" width="10" height="10" fill="#94a3b8"/>
+<rect x="30" y="149" width="10" height="10" fill="#dc2626"/>
 <text x="46" y="159" font-family="Arial, sans-serif" font-size="12" fill="#17243a" font-weight="400">Original baseline</text>
-<rect x="436.667" y="149" width="10" height="10" fill="#4e69a6"/>
+<rect x="436.667" y="149" width="10" height="10" fill="#f87171"/>
 <text x="452.667" y="159" font-family="Arial, sans-serif" font-size="12" fill="#17243a" font-weight="400">Pre-parser control</text>
-<rect x="843.333" y="149" width="10" height="10" fill="#00838d"/>
+<rect x="843.333" y="149" width="10" height="10" fill="#16a34a"/>
 <text x="859.333" y="159" font-family="Arial, sans-serif" font-size="12" fill="#17243a" font-weight="400">Incremental POST parsing</text>
 <line x1="300" y1="178" x2="300" y2="586" stroke="#e1e7ef"/>
 <text x="294" y="606" font-family="Arial, sans-serif" font-size="12" fill="#56657a" font-weight="400">0</text>
@@ -24,36 +24,35 @@
 <text x="1164" y="606" font-family="Arial, sans-serif" font-size="12" fill="#56657a" font-weight="400">500</text>
 <text x="30" y="189" font-family="Arial, sans-serif" font-size="14" fill="#17243a" font-weight="400">POST 500 x 10 KB / 1</text>
 <text x="30" y="206" font-family="Arial, sans-serif" font-size="14" fill="#17243a" font-weight="400">concurrent</text>
-<rect x="300" y="177" width="335.779" height="17" fill="#94a3b8"/>
+<rect x="300" y="177" width="335.779" height="17" fill="#dc2626"/>
 <text x="642.779" y="191" font-family="Arial, sans-serif" font-size="13" fill="#17243a" font-weight="400">192.977</text>
-<rect x="300" y="201" width="301.523" height="17" fill="#4e69a6"/>
+<rect x="300" y="201" width="301.523" height="17" fill="#f87171"/>
 <text x="608.523" y="215" font-family="Arial, sans-serif" font-size="13" fill="#17243a" font-weight="400">173.289</text>
-<rect x="300" y="225" width="195.696" height="17" fill="#00838d"/>
+<rect x="300" y="225" width="195.696" height="17" fill="#16a34a"/>
 <text x="502.696" y="239" font-family="Arial, sans-serif" font-size="13" fill="#17243a" font-weight="400">112.469</text>
 <text x="30" y="291" font-family="Arial, sans-serif" font-size="14" fill="#17243a" font-weight="400">POST 500 x 10 KB / 4</text>
 <text x="30" y="308" font-family="Arial, sans-serif" font-size="14" fill="#17243a" font-weight="400">concurrent</text>
-<rect x="300" y="279" width="794.711" height="17" fill="#94a3b8"/>
+<rect x="300" y="279" width="794.711" height="17" fill="#dc2626"/>
 <text x="1101.71" y="293" font-family="Arial, sans-serif" font-size="13" fill="#17243a" font-weight="400">456.73</text>
-<rect x="300" y="303" width="704.265" height="17" fill="#4e69a6"/>
+<rect x="300" y="303" width="704.265" height="17" fill="#f87171"/>
 <text x="1011.26" y="317" font-family="Arial, sans-serif" font-size="13" fill="#17243a" font-weight="400">404.75</text>
-<rect x="300" y="327" width="355.64" height="17" fill="#00838d"/>
+<rect x="300" y="327" width="355.64" height="17" fill="#16a34a"/>
 <text x="662.64" y="341" font-family="Arial, sans-serif" font-size="13" fill="#17243a" font-weight="400">204.391</text>
 <text x="30" y="393" font-family="Arial, sans-serif" font-size="14" fill="#17243a" font-weight="400">POST 50 x 100 KB / 1</text>
 <text x="30" y="410" font-family="Arial, sans-serif" font-size="14" fill="#17243a" font-weight="400">concurrent</text>
-<rect x="300" y="381" width="330.376" height="17" fill="#94a3b8"/>
+<rect x="300" y="381" width="330.376" height="17" fill="#dc2626"/>
 <text x="637.376" y="395" font-family="Arial, sans-serif" font-size="13" fill="#17243a" font-weight="400">189.871</text>
-<rect x="300" y="405" width="297.764" height="17" fill="#4e69a6"/>
+<rect x="300" y="405" width="297.764" height="17" fill="#f87171"/>
 <text x="604.764" y="419" font-family="Arial, sans-serif" font-size="13" fill="#17243a" font-weight="400">171.129</text>
-<rect x="300" y="429" width="176.732" height="17" fill="#00838d"/>
+<rect x="300" y="429" width="176.732" height="17" fill="#16a34a"/>
 <text x="483.732" y="443" font-family="Arial, sans-serif" font-size="13" fill="#17243a" font-weight="400">101.57</text>
 <text x="30" y="495" font-family="Arial, sans-serif" font-size="14" fill="#17243a" font-weight="400">POST 50 x 100 KB / 4</text>
 <text x="30" y="512" font-family="Arial, sans-serif" font-size="14" fill="#17243a" font-weight="400">concurrent</text>
-<rect x="300" y="483" width="777.719" height="17" fill="#94a3b8"/>
+<rect x="300" y="483" width="777.719" height="17" fill="#dc2626"/>
 <text x="1084.72" y="497" font-family="Arial, sans-serif" font-size="13" fill="#17243a" font-weight="400">446.965</text>
-<rect x="300" y="507" width="696.856" height="17" fill="#4e69a6"/>
+<rect x="300" y="507" width="696.856" height="17" fill="#f87171"/>
 <text x="1003.86" y="521" font-family="Arial, sans-serif" font-size="13" fill="#17243a" font-weight="400">400.492</text>
-<rect x="300" y="531" width="371.864" height="17" fill="#00838d"/>
+<rect x="300" y="531" width="371.864" height="17" fill="#16a34a"/>
 <text x="678.864" y="545" font-family="Arial, sans-serif" font-size="13" fill="#17243a" font-weight="400">213.715</text>
 <text x="30" y="633" font-family="Arial, sans-serif" font-size="12" fill="#56657a" font-weight="400">Median of 3 fresh workers per condition. Not a new RSS measurement of the final implementation.</text>
-<text x="30" y="674" font-family="Arial, sans-serif" font-size="12" fill="#56657a" font-weight="400">Brown bars mark increases in lower-is-better metrics.</text>
 </svg>
