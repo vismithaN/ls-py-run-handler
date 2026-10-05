@@ -71,8 +71,11 @@ trips, generated IDs, large fields, nested JSON/Unicode/escapes, empty defaults,
 repeated contents, invalid input and missing storage. The missing-object test
 exposed a silent HTTP 200 with empty fields; I fixed it to return 503, separately
 from performance work. Later tests covered session reuse, parallel clients and
-duplicate-ID rollback. The final [application suite](tests/test_runs.py) has
-ten named tests.
+duplicate-ID rollback. The final [application suite](tests/test_runs.py) groups
+API behavior into seven focused test functions with 26 named parameterized cases.
+It checks returned values, rejected writes, rollback, storage failures and
+concurrency without asserting internal method-call counts. All 26 cases passed
+against isolated PostgreSQL and object-storage resources after this cleanup.
 
 The experiment cycle was: **baseline, profile, hypothesis, focused change,
 correctness check, remeasure, keep or revert**. I preserved the supplied timing

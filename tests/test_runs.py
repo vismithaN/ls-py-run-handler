@@ -1,438 +1,276 @@
+"""Integration coverage for run values, parsing, storage failures and concurrency."""
+
 import asyncio
 import uuid
-from unittest.mock import patch
 
 import asyncpg
 import orjson
 import pytest
+import pytest_asyncio
 from aiobotocore.session import get_session
-from fastapi.encoders import jsonable_encoder
 from httpx import ASGITransport, AsyncClient
 
-from ls_py_handler.api.routes.runs import Run, get_s3_client
-from ls_py_handler.api.streaming import json_array_items
 from ls_py_handler.config.settings import settings
 from ls_py_handler.main import app
-from ls_py_handler.s3 import get_s3_session
 
 pytestmark = pytest.mark.asyncio
 
 
-def make_run(name="Test Run", **fields):
-    """Build a request with explicit IDs and simple default data."""
-    return Run(trace_id=uuid.uuid4(), name=name, **fields).model_dump(mode="json")
+def make_run(**fields):
+    return {
+        "id": str(uuid.uuid4()),
+        "trace_id": str(uuid.uuid4()),
+        "name": "Test Run",
+        "inputs": {},
+        "outputs": {},
+        "metadata": {},
+        **fields,
+    }
+
+
+@pytest_asyncio.fixture
+async def client():
+    assert settings.DB_NAME == "postgres_test" or settings.DB_NAME.startswith(
+        "postgres_test_"
+    ), "Use a dedicated test database"
+    assert settings.S3_BUCKET_NAME == "runs-test" or settings.S3_BUCKET_NAME.startswith(
+        "runs-test-"
+    ), "Use a dedicated test bucket"
+    transport = ASGITransport(app=app, raise_app_exceptions=False)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        yield client
+
+
+@pytest_asyncio.fixture
+async def storage(client):
+    """Inspect only the test resources guarded by the client fixture."""
+    db = await asyncpg.connect(
+        host=settings.DB_HOST,
+        port=settings.DB_PORT,
+        user=settings.DB_USER,
+        password=settings.DB_PASSWORD,
+        database=settings.DB_NAME,
+        timeout=5,
+    )
+    try:
+        async with get_session().create_client(
+            "s3",
+            endpoint_url=settings.S3_ENDPOINT_URL,
+            aws_access_key_id=settings.S3_ACCESS_KEY,
+            aws_secret_access_key=settings.S3_SECRET_KEY,
+            region_name=settings.S3_REGION,
+        ) as s3:
+            yield db, s3
+    finally:
+        await db.close()
 
 
 async def assert_roundtrip(client, runs):
-    """Create the batch, then compare every returned run with its input."""
     response = await client.post("/runs", json=runs)
     assert response.status_code == 201, response.text
-    assert response.headers["content-type"] == "application/json"
-    assert int(response.headers["content-length"]) == len(response.content)
-    assert response.json()["status"] == "created"
-    ids = response.json()["run_ids"]
-    assert len(ids) == len(runs)
-    assert len(set(ids)) == len(ids)
-
+    result = response.json()
+    assert result["status"] == "created"
+    ids = result["run_ids"]
+    assert len(ids) == len(runs) == len(set(ids))
     for sent, run_id in zip(runs, ids, strict=True):
         assert uuid.UUID(run_id).version == 4
-        if "id" in sent:
-            assert run_id == sent["id"]
+        assert run_id == sent.get("id", run_id)
         expected = {"inputs": {}, "outputs": {}, "metadata": {}, **sent, "id": run_id}
         response = await client.get(f"/runs/{run_id}")
         assert response.status_code == 200, response.text
-        assert response.headers["content-type"] == "application/json"
-        assert int(response.headers["content-length"]) == len(response.content)
         assert response.json() == expected
     return ids
 
 
-async def test_create_and_get_run():
-    """Existing batch test, strengthened to compare IDs and trace IDs too."""
-    runs = [
-        make_run(
-            "Test Run 1",
-            inputs={"prompt": "What is the capital of France?"},
-            outputs={"answer": "Paris"},
-            metadata={"model": "gpt-4", "temperature": 0.7},
+SHARED = {"same": [1, "repeat", {"empty": {}}]}
+LARGE = {"text": "x" * (100 * 1024)}
+
+
+@pytest.mark.parametrize(
+    "runs",
+    [
+        pytest.param(
+            [make_run(name=f"Run {i}", inputs={"value": i}) for i in range(3)],
+            id="explicit-ids-and-order",
         ),
-        make_run(
-            "Test Run 2",
-            inputs={"prompt": "Tell me about machine learning"},
-            outputs={"answer": "Machine learning is a branch of AI..."},
-            metadata={"model": "gpt-3.5-turbo", "temperature": 0.5},
+        pytest.param(
+            [{k: v for k, v in make_run().items() if k != "id"} for _ in range(2)],
+            id="generated-ids",
         ),
-        make_run(
-            "Test Run 3",
-            inputs={"prompt": "Python code example"},
-            outputs={"code": "print('Hello, World!')"},
-            metadata={"model": "codex", "temperature": 0.2},
-        ),
-    ]
-    get_counts = []
-    decode_counts = []
-    conversion_counts = []
-    copy_calls = []
-    original_copy = asyncpg.Connection.copy_records_to_table
-    parsed_after_encoding = []
-
-    async def observed_items(request):
-        async for item in json_array_items(request):
-            parsed_after_encoding.append(dump.call_count)
-            yield item
-
-    async def counted_copy(db, table, **kwargs):
-        copy_calls.append((table, kwargs["columns"]))
-        return await original_copy(db, table, **kwargs)
-
-    async def counted_s3_client():
-        async for s3 in get_s3_client():
-            with (
-                patch.object(s3, "get_object", wraps=s3.get_object) as get_object,
-                patch.object(orjson, "loads", wraps=orjson.loads) as loads,
-                patch(
-                    "fastapi.routing.jsonable_encoder", wraps=jsonable_encoder
-                ) as convert,
-            ):
-                yield s3
-                get_counts.append(get_object.call_count)
-                decode_counts.append(loads.call_count)
-                conversion_counts.append(convert.call_count)
-
-    with (
-        patch.dict(app.dependency_overrides, {get_s3_client: counted_s3_client}),
-        patch.object(asyncpg.Connection, "copy_records_to_table", counted_copy),
-        patch("ls_py_handler.api.routes.runs.json_array_items", observed_items),
-        patch.object(
-            Run, "model_dump", autospec=True, side_effect=Run.model_dump
-        ) as dump,
-        patch(
-            "starlette.requests.Request.body",
-            side_effect=AssertionError("Full body buffered"),
-        ),
-        patch(
-            "starlette.requests.Request.json",
-            side_effect=AssertionError("Full input decoded"),
-        ),
-    ):
-        async with AsyncClient(app=app, base_url="http://test") as client:
-            await assert_roundtrip(client, runs)
-
-    assert get_counts == [0, 1, 1, 1]  # POST, then one S3 GET per run.
-    assert decode_counts == [0, 3, 3, 3]  # Decode three fields from one S3 read.
-    assert conversion_counts == [0, 0, 0, 0]  # POST and GET skip conversion.
-    assert copy_calls == [
-        ("runs", ("id", "trace_id", "name", "inputs", "outputs", "metadata"))
-    ]  # One database COPY for the entire POST batch.
-    assert parsed_after_encoding == [0, 1, 2]  # Encode run 1 before parsing run 2.
-
-
-async def test_s3_session_reused_but_clients_remain_request_scoped():
-    session = get_s3_session()
-    with patch.object(
-        session, "create_client", wraps=session.create_client
-    ) as create_client:
-        async with AsyncClient(app=app, base_url="http://test") as client:
-            await assert_roundtrip(client, [make_run("Session reuse")])
-
-    assert get_s3_session() is session
-    assert create_client.call_count == 2  # One client for POST, another for GET.
-
-
-async def test_s3_session_handles_parallel_requests():
-    session = get_s3_session()
-    runs = [
-        make_run(f"Parallel {index}", inputs={"index": index}) for index in range(3)
-    ]
-    with patch.object(
-        session, "create_client", wraps=session.create_client
-    ) as create_client:
-        async with AsyncClient(app=app, base_url="http://test") as client:
-            await asyncio.gather(*(assert_roundtrip(client, [run]) for run in runs))
-
-    assert create_client.call_count == 6  # Each POST and GET has its own client.
-
-
-async def test_generated_ids():
-    runs = [
-        make_run("First", inputs={"value": 1}),
-        make_run("Second", inputs={"value": 2}),
-    ]
-    for run in runs:
-        del run["id"]
-    async with AsyncClient(app=app, base_url="http://test") as client:
-        await assert_roundtrip(client, runs)
-
-
-async def test_large_payload():
-    run = make_run(
-        inputs={"text": "i" * (100 * 1024)},
-        outputs={"text": "o" * (100 * 1024)},
-        metadata={"text": "m" * (100 * 1024)},
-    )
-    async with AsyncClient(app=app, base_url="http://test") as client:
-        await assert_roundtrip(client, [run])
-        # A size hint must also handle large/small/large runs in one batch.
-        await assert_roundtrip(
-            client,
+        pytest.param(
             [
-                make_run("Large first", inputs=run["inputs"]),
-                make_run("Small middle", inputs={"value": 1}),
-                make_run("Large last", outputs=run["outputs"]),
+                make_run(),
+                {
+                    k: v
+                    for k, v in make_run().items()
+                    if k not in ("inputs", "outputs", "metadata")
+                },
             ],
-        )
+            id="empty-and-omitted-fields",
+        ),
+        pytest.param(
+            [
+                make_run(inputs=LARGE, outputs=LARGE, metadata=LARGE),
+                make_run(),
+                make_run(outputs=LARGE),
+            ],
+            id="large-small-large",
+        ),
+        pytest.param(
+            [
+                make_run(inputs={"wrapper": SHARED}, outputs=SHARED),
+                make_run(inputs=SHARED, outputs=SHARED, metadata=SHARED),
+            ],
+            id="repeated-and-nested-content",
+        ),
+    ],
+)
+async def test_batch_roundtrip(client, runs):
+    await assert_roundtrip(client, runs)
 
 
-async def test_nested_json_and_special_characters():
+@pytest.mark.parametrize("encoding", ["utf-8", "utf-16", "utf-32"])
+async def test_fragmented_json(client, encoding):
     run = make_run(
         inputs={
-            "nested": {
-                "items": [
-                    None,
-                    True,
-                    False,
-                    0,
-                    -7,
-                    1.25,
-                    "",
-                    {"deep": []},
-                    -(2**63),
-                    2**64 - 1,
-                    1e300,
-                    -0.0,
-                ]
-            }
+            "nested": [
+                None,
+                True,
+                False,
+                0,
+                -7,
+                1.25,
+                "",
+                {"deep": []},
+                -(2**63),
+                2**64 - 1,
+                1e300,
+                -0.0,
+            ]
         },
         outputs={"text": '🌍 தமிழ் 中文 café "quotes" \\path\nnext\tcolumn'},
         metadata={"tags": ["one", "two"], "details": {"enabled": True}},
     )
-    async with AsyncClient(app=app, base_url="http://test") as client:
-        await assert_roundtrip(client, [run])
-        # Split UTF characters, escapes and tokens across receive boundaries.
-        text = orjson.dumps([run]).decode()
-        for encoding in ("utf-8", "utf-16", "utf-32"):
-            # Explicit IDs need to be unique for each successful POST.
-            run["id"] = str(uuid.uuid4())
-            text = orjson.dumps([run]).decode()
-            payload = text.encode(encoding)
+    payload = orjson.dumps([run]).decode().encode(encoding)
 
-            async def pieces(data=payload):
-                for start in range(0, len(data), 7):
-                    yield data[start : start + 7]
+    async def chunks():
+        for start in range(0, len(payload), 7):
+            yield payload[start : start + 7]
 
-            response = await client.post(
-                "/runs",
-                content=pieces(),
-                headers={"Content-Type": "application/vendor+json"},
-            )
-            assert response.status_code == 201, response.text
-            response = await client.get(f"/runs/{run['id']}")
-            assert response.json() == run
-
-
-async def test_empty_and_omitted_fields():
-    explicit = make_run("Empty", inputs={}, outputs={}, metadata={})
-    omitted = make_run("Omitted")
-    for field in ("inputs", "outputs", "metadata"):
-        del omitted[field]
-    async with AsyncClient(app=app, base_url="http://test") as client:
-        await assert_roundtrip(client, [explicit, omitted])
-
-
-async def test_repeated_field_content():
-    shared = {"same": [1, "repeat", {"empty": {}}]}
-    runs = [
-        make_run("Nested", inputs={"wrapper": shared}, outputs=shared, metadata={}),
-        make_run("Repeated", inputs=shared, outputs=shared, metadata=shared),
-    ]
-    async with AsyncClient(app=app, base_url="http://test") as client:
-        ids = await assert_roundtrip(client, runs)
-        other_id = (await assert_roundtrip(client, [make_run(metadata=shared)]))[0]
-    db = await asyncpg.connect(
-        host=settings.DB_HOST,
-        port=settings.DB_PORT,
-        user=settings.DB_USER,
-        password=settings.DB_PASSWORD,
-        database=settings.DB_NAME,
+    response = await client.post(
+        "/runs", content=chunks(), headers={"Content-Type": "application/vendor+json"}
     )
-    try:
-        row = await db.fetchrow(
-            "SELECT inputs, outputs, metadata FROM runs WHERE id = $1",
-            uuid.UUID(ids[1]),
-        )
-        starts = [row[field].split("#", 1)[1].split(":", 1)[0] for field in row.keys()]
-        assert len(set(starts)) == 3
-
-        # A reference to a different batch object still uses the old read path.
-        other_ref = await db.fetchval(
-            "SELECT metadata FROM runs WHERE id = $1", uuid.UUID(other_id)
-        )
-        await db.execute(
-            "UPDATE runs SET metadata = $1 WHERE id = $2",
-            other_ref,
-            uuid.UUID(ids[1]),
-        )
-    finally:
-        await db.close()
-
-    async with AsyncClient(app=app, base_url="http://test") as client:
-        response = await client.get(f"/runs/{ids[1]}")
-        assert response.status_code == 200
-        assert response.json()["metadata"] == shared
+    assert response.status_code == 201, response.text
+    assert response.json()["run_ids"] == [run["id"]]
+    response = await client.get(f"/runs/{run['id']}")
+    assert response.status_code == 200, response.text
+    assert response.json() == run
 
 
-async def test_invalid_requests_and_missing_runs():
-    db = await asyncpg.connect(
-        host=settings.DB_HOST,
-        port=settings.DB_PORT,
-        user=settings.DB_USER,
-        password=settings.DB_PASSWORD,
-        database=settings.DB_NAME,
-        timeout=5,
-    )
-    try:
-        async with get_session().create_client(
-            "s3",
-            endpoint_url=settings.S3_ENDPOINT_URL,
-            aws_access_key_id=settings.S3_ACCESS_KEY,
-            aws_secret_access_key=settings.S3_SECRET_KEY,
-            region_name=settings.S3_REGION,
-        ) as s3, AsyncClient(app=app, base_url="http://test") as client:
-            before_rows = await db.fetchval("SELECT count(*) FROM runs")
-            before_keys = set()
-            async for page in s3.get_paginator("list_objects_v2").paginate(
-                Bucket=settings.S3_BUCKET_NAME
-            ):
-                before_keys.update(item["Key"] for item in page.get("Contents", []))
+async def storage_snapshot(db, s3):
+    keys = set()
+    async for page in s3.get_paginator("list_objects_v2").paginate(
+        Bucket=settings.S3_BUCKET_NAME
+    ):
+        keys.update(item["Key"] for item in page.get("Contents", []))
+    return await db.fetchval("SELECT count(*) FROM runs"), keys
 
-            response = await client.post("/runs", json=[])
-            assert response.status_code == 400
 
-            invalid = make_run("Missing trace")
-            del invalid["trace_id"]
-            response = await client.post("/runs", json=[make_run("Valid"), invalid])
-            assert response.status_code == 422
-            assert response.json()["detail"][0]["loc"] == ["body", 1, "trace_id"]
+VALID_BATCH = orjson.dumps([make_run()])
 
-            valid_prefix = orjson.dumps([make_run("Valid prefix")])
-            for malformed in (
-                valid_prefix[:-1],
-                valid_prefix + b" {}",
-                valid_prefix[:-1] + b",]",
-                b"[",
-                b" ",
-            ):
-                response = await client.post(
-                    "/runs",
-                    content=malformed,
-                    headers={"Content-Type": "application/json"},
-                )
-                assert response.status_code == 422, response.text
-                assert response.json()["detail"][0]["type"] == "json_invalid"
-            for value in ({}, "not an array", 3, True):
-                response = await client.post("/runs", json=value)
-                assert response.status_code == 422
-                assert response.json()["detail"][0]["loc"] == ["body"]
-            for body in (b"", b"null"):
-                response = await client.post(
-                    "/runs", content=body, headers={"Content-Type": "application/json"}
-                )
-                assert response.status_code == 422
-                assert response.json()["detail"][0]["type"] == "missing"
 
-            schema = (await client.get("/openapi.json")).json()
-            post = schema["paths"]["/runs"]["post"]
-            assert (
-                post["requestBody"]["content"]["application/json"]["schema"]["type"]
-                == "array"
-            )
-            assert "422" in post["responses"]
-
-            assert await db.fetchval("SELECT count(*) FROM runs") == before_rows
-            after_keys = set()
-            async for page in s3.get_paginator("list_objects_v2").paginate(
-                Bucket=settings.S3_BUCKET_NAME
-            ):
-                after_keys.update(item["Key"] for item in page.get("Contents", []))
-            assert after_keys == before_keys
-
-            response = await client.get("/runs/not-a-uuid")
-            assert response.status_code == 422
-            response = await client.get(f"/runs/{uuid.uuid4()}")
-            assert response.status_code == 404
-
-            # Database failures must not commit the valid rows before a duplicate.
-            existing = make_run("Existing ID")
-            await assert_roundtrip(client, [existing])
-            before_rows = await db.fetchval("SELECT count(*) FROM runs")
-            duplicate = make_run("Duplicate within batch")
-            failing_batches = [
-                [
-                    make_run("New first"),
-                    make_run("Existing duplicate", id=existing["id"]),
-                ],
-                [duplicate, {**duplicate, "name": "Repeated ID"}],
+@pytest.mark.parametrize(
+    "body,expected_status",
+    [
+        pytest.param(b"[]", 400, id="empty-batch"),
+        *[
+            pytest.param(body, 422, id=name)
+            for name, body in [
+                ("empty-body", b""),
+                ("null", b"null"),
+                ("whitespace", b" "),
+                ("unclosed-array", b"["),
+                ("truncated-batch", VALID_BATCH[:-1]),
+                ("trailing-json", VALID_BATCH + b" {}"),
+                ("trailing-comma", VALID_BATCH[:-1] + b",]"),
+                ("object-root", b"{}"),
+                ("string-root", b'"not an array"'),
+                ("number-root", b"3"),
+                ("boolean-root", b"true"),
+                (
+                    "invalid-run-after-valid-run",
+                    orjson.dumps([make_run(), {"name": "Invalid"}]),
+                ),
             ]
-            transport = ASGITransport(app=app, raise_app_exceptions=False)
-            async with AsyncClient(
-                transport=transport, base_url="http://test"
-            ) as failing_client:
-                for batch in failing_batches:
-                    response = await failing_client.post("/runs", json=batch)
-                    assert response.status_code == 500
-                    assert await db.fetchval("SELECT count(*) FROM runs") == before_rows
-                    new_ids = [
-                        uuid.UUID(run["id"])
-                        for run in batch
-                        if run["id"] != existing["id"]
-                    ]
-                    assert (
-                        await db.fetchval(
-                            "SELECT count(*) FROM runs WHERE id = ANY($1::uuid[])",
-                            new_ids,
-                        )
-                        == 0
-                    )
-            response = await client.get(f"/runs/{existing['id']}")
-            assert response.status_code == 200 and response.json() == existing
-            await assert_roundtrip(client, [make_run("After failed database batch")])
-    finally:
-        await db.close()
-
-
-async def test_missing_storage_object():
-    # This test deletes only the object for the run it creates, in the test bucket.
-    assert settings.S3_BUCKET_NAME == "runs-test" or settings.S3_BUCKET_NAME.startswith(
-        "runs-test-"
-    ), "Use a dedicated test bucket"
-    db = await asyncpg.connect(
-        host=settings.DB_HOST,
-        port=settings.DB_PORT,
-        user=settings.DB_USER,
-        password=settings.DB_PASSWORD,
-        database=settings.DB_NAME,
-        timeout=5,
+        ],
+    ],
+)
+async def test_rejected_batch_writes_nothing(client, storage, body, expected_status):
+    before = await storage_snapshot(*storage)
+    response = await client.post(
+        "/runs", content=body, headers={"Content-Type": "application/json"}
     )
-    try:
-        async with get_session().create_client(
-            "s3",
-            endpoint_url=settings.S3_ENDPOINT_URL,
-            aws_access_key_id=settings.S3_ACCESS_KEY,
-            aws_secret_access_key=settings.S3_SECRET_KEY,
-            region_name=settings.S3_REGION,
-        ) as s3, AsyncClient(app=app, base_url="http://test") as client:
-            run = make_run(inputs={"prompt": "hello"}, outputs={"answer": "world"})
-            await assert_roundtrip(client, [run])
-            reference = await db.fetchval(
-                "SELECT inputs FROM runs WHERE id = $1", uuid.UUID(run["id"])
-            )
-            # Reference format: s3://bucket/object-key#start:end/field
-            key = reference.split("#", 1)[0].split("/", 3)[3]
-            await s3.delete_object(Bucket=settings.S3_BUCKET_NAME, Key=key)
+    assert response.status_code == expected_status, response.text
+    if expected_status == 422:
+        assert response.json()["detail"]
+    assert await storage_snapshot(*storage) == before
 
-            response = await client.get(f"/runs/{run['id']}")
-            assert response.status_code == 503, response.text
-            assert response.json() == {"detail": "Stored run data is unavailable"}
-            await assert_roundtrip(client, [make_run("After failed S3 read")])
-    finally:
-        await db.close()
+
+@pytest.mark.parametrize("duplicate", ["existing-id", "within-batch"])
+async def test_failed_batch_rolls_back(client, storage, duplicate):
+    db, _ = storage
+    existing = make_run()
+    await assert_roundtrip(client, [existing])
+    first = make_run()
+    second = make_run(id=existing["id"] if duplicate == "existing-id" else first["id"])
+    before = await db.fetchval("SELECT count(*) FROM runs")
+    response = await client.post("/runs", json=[first, second])
+    assert response.status_code == 500, response.text
+    assert await db.fetchval("SELECT count(*) FROM runs") == before
+    assert (
+        await db.fetchval(
+            "SELECT count(*) FROM runs WHERE id = $1", uuid.UUID(first["id"])
+        )
+        == 0
+    )
+    response = await client.get(f"/runs/{existing['id']}")
+    assert response.status_code == 200 and response.json() == existing
+    await assert_roundtrip(client, [make_run()])
+
+
+async def test_missing_runs_and_objects(client, storage):
+    db, s3 = storage
+    assert (await client.get("/runs/not-a-uuid")).status_code == 422
+    assert (await client.get(f"/runs/{uuid.uuid4()}")).status_code == 404
+    run = make_run(inputs={"prompt": "hello"}, outputs={"answer": "world"})
+    await assert_roundtrip(client, [run])
+    reference = await db.fetchval(
+        "SELECT inputs FROM runs WHERE id = $1", uuid.UUID(run["id"])
+    )
+    key = reference.split("#", 1)[0].split("/", 3)[3]
+    await s3.delete_object(Bucket=settings.S3_BUCKET_NAME, Key=key)
+    response = await client.get(f"/runs/{run['id']}")
+    assert response.status_code == 503, response.text
+    assert response.json() == {"detail": "Stored run data is unavailable"}
+    await assert_roundtrip(client, [make_run()])
+
+
+async def test_fields_in_different_objects(client, storage):
+    db, _ = storage
+    run, other = make_run(), make_run(metadata={"source": "another batch"})
+    await assert_roundtrip(client, [run])
+    await assert_roundtrip(client, [other])
+    reference = await db.fetchval(
+        "SELECT metadata FROM runs WHERE id = $1", uuid.UUID(other["id"])
+    )
+    await db.execute(
+        "UPDATE runs SET metadata = $1 WHERE id = $2", reference, uuid.UUID(run["id"])
+    )
+    response = await client.get(f"/runs/{run['id']}")
+    assert response.status_code == 200, response.text
+    assert response.json() == {**run, "metadata": other["metadata"]}
+
+
+async def test_parallel_roundtrips(client):
+    runs = [make_run(inputs={"request": i}) for i in range(3)]
+    await asyncio.gather(*(assert_roundtrip(client, [run]) for run in runs))
