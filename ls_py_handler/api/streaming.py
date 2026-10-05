@@ -29,9 +29,11 @@ async def text_chunks(request: Request):
     prefix = bytearray()
     decoder = None
     async for chunk in request.stream():
+        # Limit each decoding step even if the server provides a larger chunk.
         for start in range(0, len(chunk), CHUNK_BYTES):
             part = memoryview(chunk)[start : start + CHUNK_BYTES]
             if decoder is None:
+                # Inspect four bytes to distinguish UTF-8/16/32 encodings.
                 prefix.extend(part)
                 if len(prefix) < 4:
                     continue
@@ -39,8 +41,10 @@ async def text_chunks(request: Request):
                 yield decoder.decode(prefix)
                 prefix.clear()
             else:
+                # Reuse the decoder so characters split across chunks stay intact.
                 yield decoder.decode(part)
     if decoder is None:
+        # Handle empty bodies and prefixes too short for the four-byte check.
         if not prefix:
             raise RequestValidationError(
                 [
@@ -54,12 +58,14 @@ async def text_chunks(request: Request):
             )
         decoder = codecs.getincrementaldecoder(json.detect_encoding(prefix))()
         yield decoder.decode(prefix)
+    # Flush the decoder to detect an incomplete final character.
     yield decoder.decode(b"", final=True)
 
 
 async def json_array_items(request: Request):
     """Yield array items incrementally; exhaust the iterator to validate all input."""
     chunks = text_chunks(request).__aiter__()
+    # Keep unconsumed text; offset tracks its position in the original body.
     buffer = ""
     offset = 0
     finished = False
@@ -96,7 +102,7 @@ async def json_array_items(request: Request):
     if not buffer:
         raise json_error("Expecting value", offset)
     if buffer[0] != "[":
-        # Error-only path: preserve the original root-type validation response.
+        # Fully decode non-array bodies only to preserve FastAPI's type errors.
         while await read_more():
             pass
         try:
@@ -126,6 +132,7 @@ async def json_array_items(request: Request):
                 }
             ]
         )
+    # Consume the opening bracket, then distinguish empty and nonempty arrays.
     consume(1)
     await skip_space()
     if buffer.startswith("]"):
@@ -141,6 +148,7 @@ async def json_array_items(request: Request):
                 try:
                     value, end = decoder.raw_decode(buffer)
                 except json.JSONDecodeError as error:
+                    # The item may be incomplete; retry after reading more text.
                     if not finished and await read_more():
                         continue
                     raise json_error(error.msg, offset + error.pos) from error
@@ -148,10 +156,12 @@ async def json_array_items(request: Request):
                     raise HTTPException(
                         400, "There was an error parsing the body"
                     ) from error
+                # Check the delimiter so partial numbers are not yielded too soon.
                 separator = end
                 while separator < len(buffer) and buffer[separator] in " \t\r\n":
                     separator += 1
                 if separator < len(buffer) and buffer[separator] in ",]":
+                    # Use this item's character length as a capped read-ahead hint.
                     read_hint = min(end, 2 * CHUNK_BYTES) if end > CHUNK_BYTES else 0
                     break
                 # More bytes may complete a number, whitespace or delimiter.
@@ -160,6 +170,7 @@ async def json_array_items(request: Request):
                     continue
                 raise json_error("Expecting ',' delimiter", offset + separator)
             closing = buffer[separator] == "]"
+            # Drop consumed text before handing the item back to the caller.
             consume(separator + 1)
             yield value
             del value
@@ -167,7 +178,9 @@ async def json_array_items(request: Request):
                 break
             await skip_space()
             if buffer.startswith("]"):
+                # A closing bracket immediately after a comma is invalid.
                 raise json_error("Expecting value", offset)
+    # After the closing bracket, only whitespace is allowed.
     await skip_space()
     if buffer:
         raise json_error("Extra data", offset)
