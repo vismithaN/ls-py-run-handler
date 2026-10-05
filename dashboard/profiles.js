@@ -1,7 +1,7 @@
 'use strict';
 
 // Curated results are loaded from files, not generated or profiled in the browser.
-const profileState = { data: null, stage: '', signature: '', pending: false, charts: [] };
+const profileState = { data: null, stage: '', report: 'cpu', signature: '', pending: false, charts: [] };
 const profileChartObserver = new ResizeObserver(entries => {
   entries.forEach(entry => entry.target.drawProfileChart?.());
 });
@@ -46,7 +46,7 @@ function setSidebarCollapsed(collapsed) {
   sidebarToggle.setAttribute('aria-expanded', String(!collapsed));
   sidebarToggle.setAttribute('aria-label', collapsed ? 'Expand navigation' : 'Collapse navigation');
   sidebarToggle.querySelector('.sidebar-toggle-icon').textContent = collapsed ? '›' : '‹';
-  sidebarToggle.querySelector('.sidebar-toggle-label').textContent = collapsed ? 'Expand menu' : 'Collapse menu';
+  sidebarToggle.title = collapsed ? 'Expand navigation' : 'Collapse navigation';
   updateProfileStageNav();
 }
 
@@ -76,6 +76,33 @@ dashboardTabs.forEach((button, index) => {
   });
 });
 window.addEventListener('hashchange', () => selectDashboardView(location.hash === '#profiles' ? 'profiles' : 'benchmarks'));
+
+const profileReportTabs = [...document.querySelectorAll('[data-profile-report]')];
+
+function selectProfileReport(report) {
+  profileState.report = report;
+  profileReportTabs.forEach(button => {
+    const selected = button.dataset.profileReport === report;
+    button.setAttribute('aria-selected', String(selected));
+    button.tabIndex = selected ? 0 : -1;
+  });
+  if (profileState.data) renderProfileInterpretation();
+}
+
+profileReportTabs.forEach((button, index) => {
+  button.addEventListener('click', () => selectProfileReport(button.dataset.profileReport));
+  button.addEventListener('keydown', event => {
+    let next;
+    if (event.key === 'ArrowRight') next = (index + 1) % profileReportTabs.length;
+    if (event.key === 'ArrowLeft') next = (index - 1 + profileReportTabs.length) % profileReportTabs.length;
+    if (event.key === 'Home') next = 0;
+    if (event.key === 'End') next = profileReportTabs.length - 1;
+    if (next == null) return;
+    event.preventDefault();
+    profileReportTabs[next].focus();
+    selectProfileReport(profileReportTabs[next].dataset.profileReport);
+  });
+});
 
 function profileTable(title, headers, rows, numeric = []) {
   const wrapper = html('div', 'value-table-wrap');
@@ -322,21 +349,25 @@ function nextExperiment(stages) {
 }
 
 function renderBaselineOverview(stage) {
+  const memoryReport = profileState.report === 'memory';
   const postPhase = phase(stage, 'post-500-10kb');
   const postMemory = workload(stage.memory, 'post-500-10kb');
   const search = functionResult(stage, 'post-500-10kb', 'Batch search');
-  const section = profileSection('Baseline profile', 'Starting measurements before performance optimization. These numbers establish what work was expensive and what should be tested next.', 'profile-overview');
+  const section = profileSection(memoryReport ? 'Baseline memory profile' : 'Baseline CPU profile', 'Starting measurements before performance optimization. These numbers establish what work was expensive and what should be tested next.', 'profile-overview');
   const heading = html('div', 'profile-heading');
   const verification = stage.source_verification;
-  heading.append(html('span', 'profile-badge', `${stage.cpu.condition} CPU`), html('span', `profile-badge ${verification.verified === verification.total ? '' : 'source-lock-warning'}`, `${verification.verified}/${verification.total} source files verified`));
+  heading.append(html('span', 'profile-badge', memoryReport ? 'Tracked memory' : `${stage.cpu.condition} CPU`), html('span', `profile-badge ${verification.verified === verification.total ? '' : 'source-lock-warning'}`, `${verification.verified}/${verification.total} source files verified`));
   section.append(heading);
 
   const kpis = html('div', 'profile-kpis');
-  kpis.append(
-    baselineMetricCard('POST 500 · first-request CPU', postPhase?.first_request_s, 's', 'Median of 3 fresh Python processes.'),
-    baselineMetricCard('POST 500 · peak tracked memory', postMemory?.peak_mib, 'MiB', 'Original whole-test Memray scope.', 1),
-    baselineMetricCard('POST 500 · batch search hotspot', search?.calls, 'calls', `${number(search?.self_s, 3)} self CPU seconds.`, 0)
-  );
+  if (memoryReport) {
+    kpis.append(baselineMetricCard('POST 500 · peak tracked memory', postMemory?.peak_mib, 'MiB', 'Original whole-test Memray scope.', 1));
+  } else {
+    kpis.append(
+      baselineMetricCard('POST 500 · first-request CPU', postPhase?.first_request_s, 's', 'Median of 3 fresh Python processes.'),
+      baselineMetricCard('POST 500 · batch search hotspot', search?.calls, 'calls', `${number(search?.self_s, 3)} self CPU seconds.`, 0)
+    );
+  }
   section.append(kpis);
 
   const story = html('div', 'profile-story');
@@ -349,7 +380,7 @@ function renderBaselineOverview(stage) {
   const candidate = stage.findings?.find(item => item.optimization === 'One-pass encoder');
   const next = html('article');
   next.append(html('h3', '', 'First optimization candidate'), html('p', '', candidate ? `${candidate.optimization} — ${candidate.validation}` : 'Remove repeated scans and duplicate payload representations, then measure again.'));
-  story.append(cpu, memory, next);
+  story.append(memoryReport ? memory : cpu, next);
   section.append(story);
   return section;
 }
@@ -402,20 +433,15 @@ function renderBaselineFindings(stage) {
     list.append(item);
   });
   section.append(list);
-  const limitations = html('details', 'profile-detail-group');
-  limitations.append(html('summary', '', 'Baseline reporting limitations'));
-  const limitationsList = html('ul', 'profile-limitations');
-  stage.limitations.forEach(text => limitationsList.append(html('li', '', text)));
-  limitations.append(limitationsList);
-  section.append(limitations);
   return section;
 }
 
 function renderBaseline(stage) {
-  return [renderBaselineOverview(stage), renderBaselineCpu(stage), renderBaselineMemory(stage), renderBaselineFindings(stage)];
+  return [renderBaselineOverview(stage), profileState.report === 'memory' ? renderBaselineMemory(stage) : renderBaselineCpu(stage), renderBaselineFindings(stage)];
 }
 
 function renderProfileOverview(stages) {
+  const memoryReport = profileState.report === 'memory';
   const baseline = stages[0];
   const current = stages.at(-1);
   const cpuBefore = phase(baseline, 'post-500-10kb')?.first_request_s;
@@ -425,20 +451,21 @@ function renderProfileOverview(stages) {
   const searchBefore = functionResult(baseline, 'post-500-10kb', 'Batch search');
   const searchAfter = functionResult(current, 'post-500-10kb', 'Batch search');
 
-  const section = profileSection(`${baseline.title} → ${current.title}`, `${stages.length} saved profile stages compared in one view. Lower CPU and memory values are better.`, 'profile-overview');
+  const section = profileSection(`${baseline.title} → ${current.title}`, `${stages.length} saved profile stages compared in one view. Lower ${memoryReport ? 'memory' : 'CPU'} values are better.`, 'profile-overview');
   const heading = html('div', 'profile-heading');
   const verified = stages.reduce((sum, stage) => sum + stage.source_verification.verified, 0);
   const total = stages.reduce((sum, stage) => sum + stage.source_verification.total, 0);
-  heading.append(html('span', 'profile-badge', `${current.cpu.condition} CPU`), html('span', `profile-badge ${verified === total ? '' : 'source-lock-warning'}`, `${verified}/${total} source files verified`));
+  heading.append(html('span', 'profile-badge', memoryReport ? 'Tracked memory' : `${current.cpu.condition} CPU`), html('span', `profile-badge ${verified === total ? '' : 'source-lock-warning'}`, `${verified}/${total} source files verified`));
   section.append(heading);
 
   if (stages.length > 1) {
     const kpis = html('div', 'profile-kpis');
-    kpis.append(
-      metricCard('POST 500 · first-request CPU', cpuBefore, cpuAfter, 's', 'Median of 3 fresh Python processes.'),
-      metricCard('POST 500 · peak tracked memory', memoryBefore, memoryAfter, 'MiB', 'Original whole-test Memray scope.', 1),
-      metricCard('POST 500 · batch searches', searchBefore?.calls, searchAfter?.calls, 'calls', `${number(searchBefore?.self_s, 3)} CPU s hotspot removed.`, 0)
-    );
+    if (memoryReport) {
+      kpis.append(metricCard('POST 500 · peak tracked memory', memoryBefore, memoryAfter, 'MiB', 'Original whole-test Memray scope.', 1));
+    } else {
+      kpis.append(metricCard('POST 500 · first-request CPU', cpuBefore, cpuAfter, 's', 'Median of 3 fresh Python processes.'));
+      if (searchBefore?.calls > 0) kpis.append(metricCard('POST 500 · batch searches', searchBefore.calls, searchAfter?.calls, 'calls', `${number(searchBefore.self_s, 3)} CPU s hotspot removed.`, 0));
+    }
     section.append(kpis);
   }
 
@@ -517,7 +544,7 @@ function renderCpuComparison(stages) {
 
   const details = html('details', 'profile-detail-group');
   details.append(html('summary', '', 'Exact CPU tables and source reports'));
-  stages.forEach(stage => details.append(detailedCpuTables(stage)));
+  details.append(detailedCpuTables(current));
   section.append(details, profileNotes('How to read this CPU evidence', [stages.at(-1).cpu.reading_guide, stages.at(-1).cpu.scope, stages.at(-1).cpu.limitation]));
   return section;
 }
@@ -567,7 +594,7 @@ function renderMemoryComparison(stages) {
 
   const details = html('details', 'profile-detail-group');
   details.append(html('summary', '', 'Exact memory tables and source recordings'));
-  stages.forEach(stage => details.append(detailedMemoryTables(stage)));
+  details.append(detailedMemoryTables(stages.at(-1)));
   section.append(details, profileNotes('How to read this memory evidence', [stages.at(-1).memory.scope, stages.at(-1).memory.reading_guide, stages.at(-1).memory.limitation]));
   return section;
 }
@@ -591,29 +618,21 @@ function renderEvidence(stages) {
     section.append(next);
   }
 
-  const limitations = html('details', 'profile-detail-group');
-  limitations.append(html('summary', '', 'Reporting limitations'));
-  const limitationsList = html('ul', 'profile-limitations');
-  current.limitations.forEach(text => limitationsList.append(html('li', '', text)));
-  limitations.append(limitationsList);
-
   const sources = html('details', 'profile-sources');
   sources.append(html('summary', '', 'Pinned reports, source hashes and calculation rules'));
-  stages.forEach(stage => {
-    sources.append(html('h3', '', stage.title));
-    sources.append(html('p', 'profile-meta', `Commit ${stage.commit.slice(0, 7)} · ${stage.review_status}`));
-    sources.append(profileTable(`${stage.title} profile metrics and pinned reports`, ['Displayed metric', 'Pinned report IDs', 'Calculation'], stage.metric_sources.map(item => [item.metric, item.source_ids.join(', '), item.rule])));
-    const links = html('ul');
-    Object.entries(stage.sources).forEach(([id, source]) => {
-      const row = html('li');
-      const fingerprint = html('code', '', `${source.path} · SHA-256 ${source.sha256.slice(0, 12)}… · ${source.size_bytes} bytes`);
-      fingerprint.title = source.sha256;
-      row.append(profileSource(stage, id, source.label), fingerprint);
-      links.append(row);
-    });
-    sources.append(links);
+  sources.append(html('h3', '', current.title));
+  sources.append(html('p', 'profile-meta', `Commit ${current.commit.slice(0, 7)} · ${current.review_status}`));
+  sources.append(profileTable(`${current.title} profile metrics and pinned reports`, ['Displayed metric', 'Pinned report IDs', 'Calculation'], current.metric_sources.map(item => [item.metric, item.source_ids.join(', '), item.rule])));
+  const links = html('ul');
+  Object.entries(current.sources).forEach(([id, source]) => {
+    const row = html('li');
+    const fingerprint = html('code', '', `${source.path} · SHA-256 ${source.sha256.slice(0, 12)}… · ${source.size_bytes} bytes`);
+    fingerprint.title = source.sha256;
+    row.append(profileSource(current, id, source.label), fingerprint);
+    links.append(row);
   });
-  section.append(limitations, sources);
+  sources.append(links);
+  section.append(sources);
   return section;
 }
 
@@ -621,9 +640,11 @@ function renderProfileInterpretation() {
   const stages = profileState.data.stages;
   byId('profile-empty').hidden = Boolean(stages.length);
   byId('profile-print').disabled = !stages.length;
+  byId('profile-report-tabs').hidden = !stages.length;
   if (!stages.some(stage => stage.id === profileState.stage)) profileState.stage = stages[0]?.id || '';
   const activeIndex = Math.max(stages.findIndex(stage => stage.id === profileState.stage), 0);
   const active = stages[activeIndex];
+  const comparisonStages = stages.slice(0, activeIndex + 1);
   profileStageNav.replaceChildren();
   stages.forEach((stage, index) => {
     const button = html('button', '', `${index + 1}. ${stage.title}`);
@@ -654,7 +675,7 @@ function renderProfileInterpretation() {
   });
   updateProfileStageNav();
   byId('profile-view-title').textContent = active ? (activeIndex === 0 ? 'Baseline profile' : `${active.title} comparison`) : 'Profile interpretation';
-  byId('profile-stage-summary').textContent = active ? (activeIndex === 0 ? 'Starting measurements and optimization hypotheses' : `${activeIndex + 1} stages on each graph · baseline through ${active.title}`) : 'No saved stages';
+  byId('profile-stage-summary').textContent = active ? (activeIndex === 0 ? 'Starting measurements and optimization hypotheses' : `${comparisonStages.length} stages on each graph · ${comparisonStages[0].title} through ${active.title}`) : 'No saved stages';
   const downloads = byId('profile-downloads');
   downloads.replaceChildren();
   if (active) {
@@ -667,11 +688,23 @@ function renderProfileInterpretation() {
   profileState.charts = [];
   content.replaceChildren();
   if (!stages.length) return;
+  const reportPanels = {};
+  profileReportTabs.forEach(button => {
+    const report = button.dataset.profileReport;
+    const panel = html('div', 'profile-report-panel');
+    panel.id = `profile-report-${report}`;
+    panel.setAttribute('role', 'tabpanel');
+    panel.setAttribute('aria-labelledby', button.id);
+    panel.tabIndex = 0;
+    panel.hidden = report !== profileState.report;
+    reportPanels[report] = panel;
+    content.append(panel);
+  });
+  const reportPanel = reportPanels[profileState.report];
   if (activeIndex === 0) {
-    content.append(...renderBaseline(active));
+    reportPanel.append(...renderBaseline(active));
   } else {
-    const comparisonStages = stages.slice(0, activeIndex + 1);
-    content.append(renderProfileOverview(comparisonStages), renderCpuComparison(comparisonStages), renderMemoryComparison(comparisonStages), renderEvidence(comparisonStages));
+    reportPanel.append(renderProfileOverview(comparisonStages), profileState.report === 'memory' ? renderMemoryComparison(comparisonStages) : renderCpuComparison(comparisonStages), renderEvidence(comparisonStages));
   }
   requestAnimationFrame(() => profileState.charts.forEach(plot => plot.drawProfileChart()));
 }
