@@ -1,7 +1,7 @@
 # Byte-compiled / optimized / DLL files
 __pycache__/
 measurements/
-profiles/
+/profiles/
 *.py[cod]
 *$py.class
 

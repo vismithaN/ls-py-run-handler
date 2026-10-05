@@ -1,0 +1,331 @@
+{
+  "scope": "Historical session-1 Yappi CPU-clock function extracts, checked against the pinned pstat files. Not latency or a new profile of the submitted application.",
+  "limitations": "All-phase captures include SDK work; inclusive CPU overlaps. Full recordings remain archived locally.",
+  "stages": [
+    {
+      "id": "baseline",
+      "recorded_revision": "bdf123994e632380fe5a76e2e998ce7700c8ece9",
+      "scope": "Yappi starts before application/dependency imports and stops after the first complete API response. Includes imports, event-loop/application/client startup, and that response. Excludes worker/Python/Yappi bootstrap, prepared payloads, GET seeding, verification and shutdown. PostgreSQL and MinIO remain running with their caches.",
+      "workloads": [
+        {
+          "id": "post-500-10kb",
+          "session": 1,
+          "archived_recording": "profiles/cpu/cold-20261003T050725Z/session-1/post-500-10kb/cpu.pstat",
+          "recording_sha256": "19f3a10c424b745ddcea14bdca01d28f11b3ee3ad8ee47082e56f3ead8232dbf",
+          "functions": [
+            {
+              "function": "<method 'find' of 'bytes' objects>",
+              "calls": 1500,
+              "self_s": 1.034662,
+              "inclusive_s": 1.034662,
+              "absent_from_profile": false
+            },
+            {
+              "function": "get_s3_client",
+              "calls": 1,
+              "self_s": 1.8e-05,
+              "inclusive_s": 0.16108899999999998,
+              "absent_from_profile": false
+            },
+            {
+              "function": "JSONDecoder.raw_decode",
+              "calls": 15,
+              "self_s": 0.078197,
+              "inclusive_s": 0.07819899999999999,
+              "absent_from_profile": false
+            }
+          ]
+        },
+        {
+          "id": "post-50-100kb",
+          "session": 1,
+          "archived_recording": "profiles/cpu/cold-20261003T050725Z/session-1/post-50-100kb/cpu.pstat",
+          "recording_sha256": "34997a6594fc24a028c37738855f5f059fd5237ac2b2d453622b772ff015064b",
+          "functions": [
+            {
+              "function": "<method 'find' of 'bytes' objects>",
+              "calls": 150,
+              "self_s": 0.211245,
+              "inclusive_s": 0.211245,
+              "absent_from_profile": false
+            },
+            {
+              "function": "get_s3_client",
+              "calls": 1,
+              "self_s": 1.6e-05,
+              "inclusive_s": 0.16658199999999998,
+              "absent_from_profile": false
+            },
+            {
+              "function": "JSONDecoder.raw_decode",
+              "calls": 15,
+              "self_s": 0.07997,
+              "inclusive_s": 0.079973,
+              "absent_from_profile": false
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "one-pass-encoder",
+      "recorded_revision": "8f5b53468f20d554cdb0c279c629eafa3b96ee85",
+      "scope": "Yappi starts before application/dependency imports and stops after the first complete API response. Includes imports, event-loop/application/client startup, and that response. Excludes worker/Python/Yappi bootstrap, prepared payloads, GET seeding, verification and shutdown. PostgreSQL and MinIO remain running with their caches.",
+      "workloads": [
+        {
+          "id": "post-500-10kb",
+          "session": 1,
+          "archived_recording": "profiles/cpu/20261003T183247.835556Z/session-1/post-500-10kb/cpu.pstat",
+          "recording_sha256": "a0e41c64a983b41e96082d553c71705d2e96aa239a7aed4424626ccd2d1cf889",
+          "functions": [
+            {
+              "function": "<method 'find' of 'bytes' objects>",
+              "calls": 0,
+              "self_s": 0,
+              "inclusive_s": 0,
+              "absent_from_profile": true
+            },
+            {
+              "function": "get_s3_client",
+              "calls": 1,
+              "self_s": 1.8999999999999998e-05,
+              "inclusive_s": 0.16657,
+              "absent_from_profile": false
+            }
+          ]
+        },
+        {
+          "id": "post-50-100kb",
+          "session": 1,
+          "archived_recording": "profiles/cpu/20261003T183247.835556Z/session-1/post-50-100kb/cpu.pstat",
+          "recording_sha256": "4508d0225aec40049365356453fde104a97161e18c97adb21babc596b3d93646",
+          "functions": [
+            {
+              "function": "<method 'find' of 'bytes' objects>",
+              "calls": 0,
+              "self_s": 0,
+              "inclusive_s": 0,
+              "absent_from_profile": true
+            },
+            {
+              "function": "get_s3_client",
+              "calls": 1,
+              "self_s": 1.6e-05,
+              "inclusive_s": 0.161998,
+              "absent_from_profile": false
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "s3-session-reuse",
+      "recorded_revision": "a765570b9853469fbd2a8203c625a48ef53e28c0",
+      "scope": "Yappi starts before application/dependency imports and stops after the first complete API response. Includes imports, startup/client setup and that response. Excludes worker/Python/Yappi bootstrap, prepared payloads, GET seeding, verification and shutdown. PostgreSQL and MinIO remain running with their caches.",
+      "workloads": [
+        {
+          "id": "post-500-10kb",
+          "session": 1,
+          "archived_recording": "profiles/cpu/20261003T203239.780065Z/session-1/post-500-10kb/cpu.pstat",
+          "recording_sha256": "ee824b55828e7d0701e2a54e3cdb153bbcf78ccf28ff17863acdf458788c6dcc",
+          "functions": [
+            {
+              "function": "<method 'find' of 'bytes' objects>",
+              "calls": 0,
+              "self_s": 0,
+              "inclusive_s": 0,
+              "absent_from_profile": true
+            },
+            {
+              "function": "get_s3_client",
+              "calls": 1,
+              "self_s": 1.7e-05,
+              "inclusive_s": 0.032299,
+              "absent_from_profile": false
+            }
+          ]
+        },
+        {
+          "id": "post-50-100kb",
+          "session": 1,
+          "archived_recording": "profiles/cpu/20261003T203239.780065Z/session-1/post-50-100kb/cpu.pstat",
+          "recording_sha256": "0909adf701631a20013c2aa4c6c601a4eae328dee7b828ddc2dcf49adac530e7",
+          "functions": [
+            {
+              "function": "<method 'find' of 'bytes' objects>",
+              "calls": 0,
+              "self_s": 0,
+              "inclusive_s": 0,
+              "absent_from_profile": true
+            },
+            {
+              "function": "get_s3_client",
+              "calls": 1,
+              "self_s": 1.6e-05,
+              "inclusive_s": 0.033312999999999995,
+              "absent_from_profile": false
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "incremental-post-parsing",
+      "recorded_revision": "0d41d76880e054002e7c2ecac38b3fb51787907f",
+      "scope": "Imports, startup and first request are separate. Function rows cover all captured phases, including SDK imports.",
+      "workloads": [
+        {
+          "id": "post-500-10kb",
+          "session": 1,
+          "archived_recording": "profiles/cpu/20261005T035005.959459Z/session-1/post-500-10kb/cpu.pstat",
+          "recording_sha256": "014fa8671c5e19ad2ce6671e5d832305889c5e116f0e3bda7b1413ae7494561d",
+          "functions": [
+            {
+              "function": "<method 'find' of 'bytes' objects>",
+              "calls": 0,
+              "self_s": 0,
+              "inclusive_s": 0,
+              "absent_from_profile": true
+            },
+            {
+              "function": "JSONDecoder.raw_decode",
+              "calls": 572,
+              "self_s": 0.066495,
+              "inclusive_s": 0.067631,
+              "absent_from_profile": false
+            },
+            {
+              "function": "JSONDecodeError.__init__",
+              "calls": 65,
+              "self_s": 0.00025299999999999997,
+              "inclusive_s": 0.0011359999999999999,
+              "absent_from_profile": false
+            },
+            {
+              "function": "get_s3_client",
+              "calls": 1,
+              "self_s": 1.8999999999999998e-05,
+              "inclusive_s": 0.035372,
+              "absent_from_profile": false
+            }
+          ]
+        },
+        {
+          "id": "post-50-100kb",
+          "session": 1,
+          "archived_recording": "profiles/cpu/20261005T035005.959459Z/session-1/post-50-100kb/cpu.pstat",
+          "recording_sha256": "db5ddd79fb0caa3e74a18ba1452d173a3438924b20bd86d044746b73f6e34800",
+          "functions": [
+            {
+              "function": "<method 'find' of 'bytes' objects>",
+              "calls": 0,
+              "self_s": 0,
+              "inclusive_s": 0,
+              "absent_from_profile": true
+            },
+            {
+              "function": "JSONDecoder.raw_decode",
+              "calls": 123,
+              "self_s": 0.080644,
+              "inclusive_s": 0.08909199999999999,
+              "absent_from_profile": false
+            },
+            {
+              "function": "JSONDecodeError.__init__",
+              "calls": 66,
+              "self_s": 0.000337,
+              "inclusive_s": 0.008447999999999999,
+              "absent_from_profile": false
+            },
+            {
+              "function": "get_s3_client",
+              "calls": 1,
+              "self_s": 1.4e-05,
+              "inclusive_s": 0.032905,
+              "absent_from_profile": false
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "post-get-focus",
+      "recorded_revision": "0d41d76880e054002e7c2ecac38b3fb51787907f",
+      "scope": "Imports, startup and first request separated; function rows include all captured phases.",
+      "workloads": [
+        {
+          "id": "post-500-10kb",
+          "session": 1,
+          "archived_recording": "profiles/cpu/20261005T044636.328099Z/session-1/post-500-10kb/cpu.pstat",
+          "recording_sha256": "29303f9dfc7a6015773ac661746d5fa16867b47c50a1737f1287aab6d2b55f5e",
+          "functions": [
+            {
+              "function": "get_s3_client",
+              "calls": 1,
+              "self_s": 1.8999999999999998e-05,
+              "inclusive_s": 0.033927,
+              "absent_from_profile": false
+            },
+            {
+              "function": "<method 'find' of 'bytes' objects>",
+              "calls": 0,
+              "self_s": 0,
+              "inclusive_s": 0,
+              "absent_from_profile": true
+            },
+            {
+              "function": "JSONDecoder.raw_decode",
+              "calls": 572,
+              "self_s": 0.069533,
+              "inclusive_s": 0.07088,
+              "absent_from_profile": false
+            },
+            {
+              "function": "JSONDecodeError.__init__",
+              "calls": 65,
+              "self_s": 0.000356,
+              "inclusive_s": 0.0013469999999999999,
+              "absent_from_profile": false
+            }
+          ]
+        },
+        {
+          "id": "post-50-100kb",
+          "session": 1,
+          "archived_recording": "profiles/cpu/20261005T044636.328099Z/session-1/post-50-100kb/cpu.pstat",
+          "recording_sha256": "be73bfb9ad0f94c2fc4076d7d5cfd54ffdb17a1a15148bef6bfad640214b715a",
+          "functions": [
+            {
+              "function": "get_s3_client",
+              "calls": 1,
+              "self_s": 1.4999999999999999e-05,
+              "inclusive_s": 0.038829999999999996,
+              "absent_from_profile": false
+            },
+            {
+              "function": "<method 'find' of 'bytes' objects>",
+              "calls": 0,
+              "self_s": 0,
+              "inclusive_s": 0,
+              "absent_from_profile": true
+            },
+            {
+              "function": "JSONDecoder.raw_decode",
+              "calls": 58,
+              "self_s": 0.073476,
+              "inclusive_s": 0.073696,
+              "absent_from_profile": false
+            },
+            {
+              "function": "JSONDecodeError.__init__",
+              "calls": 1,
+              "self_s": 9e-06,
+              "inclusive_s": 0.00021999999999999998,
+              "absent_from_profile": false
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
