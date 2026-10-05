@@ -51,7 +51,7 @@
           "title": "Request median latency",
           "unit": "ms",
           "legend": [
-            "Original baseline",
+            "Baseline",
             "Final"
           ],
           "rows": [
@@ -131,14 +131,14 @@
     },
     {
       "id": "final-memory",
-      "title": "Original baseline to final: tracked allocations",
+      "title": "Baseline to final: tracked allocations",
       "scope": "Original whole-test Memray peaks; one baseline capture versus median of three final captures with logging enabled. Not server RSS.",
       "panels": [
         {
           "title": "Peak tracked allocations",
           "unit": "MiB",
           "legend": [
-            "Original baseline",
+            "Baseline",
             "Final"
           ],
           "rows": [
@@ -219,13 +219,13 @@
     {
       "id": "one-pass",
       "title": "First improvement: One-pass batch encoding",
-      "scope": "Same Yappi function before/after (session 1); latency measured separately without a profiler.",
+      "scope": "Same Yappi function before/after; latency measured separately without a profiler.",
       "panels": [
         {
           "title": "CPU: bytes.find self time",
           "unit": "CPU seconds (self)",
           "legend": [
-            "Corrected baseline",
+            "Baseline",
             "One-pass batch encoding"
           ],
           "rows": [
@@ -254,13 +254,13 @@
               "source_refs": []
             }
           ],
-          "note": "Same function and capture scope; absent calls contribute zero CPU."
+          "note": ""
         },
         {
           "title": "CPU: bytes.find calls",
           "unit": "calls",
           "legend": [
-            "Corrected baseline",
+            "Baseline",
             "One-pass batch encoding"
           ],
           "rows": [
@@ -287,13 +287,13 @@
               ]
             }
           ],
-          "note": "Session-1 profiles. Offset recording removes bytes.find."
+          "note": "Offset recording removes bytes.find."
         },
         {
           "title": "Benchmark: POST median latency",
           "unit": "ms",
           "legend": [
-            "Corrected baseline",
+            "Baseline",
             "One-pass batch encoding"
           ],
           "rows": [
@@ -320,13 +320,13 @@
               ]
             }
           ],
-          "note": "Named raw-sample reports: 0001_baseline and 0004_baseline."
+          "note": ""
         },
         {
           "title": "Memray: whole-test tracked peak",
           "unit": "MiB",
           "legend": [
-            "Corrected baseline",
+            "Baseline",
             "One-pass batch encoding"
           ],
           "rows": [
@@ -353,7 +353,7 @@
               ]
             }
           ],
-          "note": "Includes test data and client allocations; not worker RSS."
+          "note": ""
         }
       ],
       "evidence_pairing": "Each panel compares the same metric, unit, workload and sampling method; CPU/memory/diagnostic/latency panels are separate."
@@ -361,6 +361,7 @@
     {
       "id": "session-reuse",
       "title": "Second improvement: S3 SDK session reuse",
+      "caption": "Original benchmarks: three suites per version.",
       "scope": "CPU: one cold capture per workload/version. Latency: median of 3 benchmark suite medians per version.",
       "panels": [
         {
@@ -394,7 +395,7 @@
               ]
             }
           ],
-          "note": "Session-1 cold profiles: same function before/after, including callees."
+          "note": "Cold CPU profiles: same function before/after, including callees."
         },
         {
           "title": "POST CPU: get_s3_client",
@@ -427,7 +428,7 @@
               ]
             }
           ],
-          "note": "Session-1 cold profiles: same function before/after, including callees."
+          "note": "Cold CPU profiles: same function before/after, including callees."
         },
         {
           "title": "GET request median",
@@ -476,7 +477,7 @@
               ]
             }
           ],
-          "note": "GET repeats separate clearly in this local test."
+          "note": ""
         },
         {
           "title": "POST request median",
@@ -749,7 +750,7 @@
               "source_refs": []
             }
           ],
-          "note": "Zero: no classified live bytes at this peak; not zero allocations over the request."
+          "note": ""
         },
         {
           "title": "Memray groups: POST 50 x 100 KB",
@@ -808,7 +809,7 @@
               "source_refs": []
             }
           ],
-          "note": "Zero: no classified live bytes at this peak; not zero allocations over the request."
+          "note": ""
         },
         {
           "title": "Memray: whole-test tracked peak",
@@ -904,7 +905,7 @@
           "title": "Absolute peak API-worker RSS",
           "unit": "MiB",
           "legend": [
-            "Original baseline",
+            "Baseline",
             "Pre-parser control",
             "Incremental POST parsing"
           ],
@@ -1017,7 +1018,7 @@
     {
       "id": "read-ahead",
       "title": "Fifth improvement: Size-guided JSON read-ahead",
-      "scope": "Yappi session-1 profiles before/after; all phases include SDK decoding. Benchmark latency is separate.",
+      "scope": "Yappi profiles before/after; all phases include SDK decoding. Benchmark latency is separate.",
       "panels": [
         {
           "title": "CPU: raw_decode calls",
@@ -1122,7 +1123,7 @@
               "source_refs": []
             }
           ],
-          "note": "Counts include all phases; fewer large-run incomplete decode attempts."
+          "note": ""
         },
         {
           "title": "Benchmark: POST median latency",
@@ -1171,7 +1172,7 @@
               ]
             }
           ],
-          "note": "Historical candidate also changed GET decoding, later reverted."
+          "note": ""
         }
       ],
       "evidence_pairing": "Each panel compares the same metric, unit, workload and sampling method; CPU/memory/diagnostic/latency panels are separate."

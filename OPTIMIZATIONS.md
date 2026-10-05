@@ -213,7 +213,7 @@ decode too early.
 
 **Matched CPU result.** POST-50 `raw_decode` calls fell from 123 to 58,
 self CPU from 0.080644 to 0.073476 s, and JSON-error constructions from 66 to 1.
-These are session-1, all-phase profiles in both versions, including SDK decoding.
+Both CPU profiles include all phases, including SDK decoding.
 POST-500 call counts did not improve. Separately, POST-50 median latency fell
 14.9% against its fresh control; POST-500 median **rose 4.7%**. Tracked peaks
 stayed effectively unchanged.
