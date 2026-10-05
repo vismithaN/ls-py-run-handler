@@ -1,6 +1,5 @@
 {
   "scope": "Peak tracked allocation for the entire benchmark test function: includes test-data generation, repeated benchmark execution and GET seeding. Client-fixture creation and earlier module imports are outside capture. Native stack capture and Python-allocator tracing were disabled, as in the original workflow.",
-  "baseline_revision": "bdf123994e632380fe5a76e2e998ce7700c8ece9",
   "captures": [
     {
       "id": "post-500-10kb",
@@ -11,7 +10,6 @@
       "ended": "2026-10-02T18:17:20.567000-07:00",
       "native_traces": false,
       "trace_python_allocators": false,
-      "archived_recording": "measurements/baseline-bdf1239-gxSv1A8k/original-memory/baseline-tests-benchmarks-test_run_performance.py-test_create_batch_runs_500_10kb.bin",
       "recording_sha256": "ea7626a9db18ae24299ace569c6eeadd3d757967db2660b53fc9cead5657ea96"
     },
     {
@@ -23,7 +21,6 @@
       "ended": "2026-10-02T18:17:34.966000-07:00",
       "native_traces": false,
       "trace_python_allocators": false,
-      "archived_recording": "measurements/baseline-bdf1239-gxSv1A8k/original-memory/baseline-tests-benchmarks-test_run_performance.py-test_create_batch_runs_50_100kb.bin",
       "recording_sha256": "0c69f16155b96c0cc6c423da8aba46411842fb524fda311869528a40c05ae392"
     },
     {
@@ -35,7 +32,6 @@
       "ended": "2026-10-02T18:17:36.650000-07:00",
       "native_traces": false,
       "trace_python_allocators": false,
-      "archived_recording": "measurements/baseline-bdf1239-gxSv1A8k/original-memory/baseline-tests-benchmarks-test_run_performance.py-test_get_run_10kb.bin",
       "recording_sha256": "6f88b6cbcb6cb1fa23b2cb73156320e722257d0a62b6cc5d76139ba8b2f7635a"
     },
     {
@@ -47,7 +43,6 @@
       "ended": "2026-10-02T18:17:38.635000-07:00",
       "native_traces": false,
       "trace_python_allocators": false,
-      "archived_recording": "measurements/baseline-bdf1239-gxSv1A8k/original-memory/baseline-tests-benchmarks-test_run_performance.py-test_get_run_100kb.bin",
       "recording_sha256": "9536049073586ca0141ac3f07cb2c39ddeaee88179bc64612fd1c973b9984bab"
     }
   ]

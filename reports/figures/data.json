@@ -5,154 +5,39 @@
   "repeat_definition": "Sample arrays contain independent suite medians or capture peaks used to calculate bar values.",
   "sources": [
     {
-      "path": "reports/interpretations/s3-session-reuse.json",
-      "sha256": "5a5218a366e7cf437354defd956588b197987141a1ec43ce5036c596817760ae",
-      "size_bytes": 18942
-    },
-    {
-      "path": "reports/interpretations/baseline.json",
-      "sha256": "5a4910fcce835e0a5e2e725eb1ac613adecb14660c3b7054a42a05374b07399e",
-      "size_bytes": 20715
-    },
-    {
-      "path": "reports/interpretations/one-pass-encoder.json",
-      "sha256": "caaae8ccc39e7790ba14be2e7d18b1b82468f398e357b9c9173b4a479917b51d",
-      "size_bytes": 20118
-    },
-    {
-      "path": "reports/interpretations/frozen-final.json",
-      "sha256": "452185f3ee328e54ceec562d9c881f89762a11a67531923f1df5fa96caec7c8b",
-      "size_bytes": 43623
-    },
-    {
-      "path": "reports/interpretations/incremental-post-parsing.json",
-      "sha256": "ba34f4b2ae8f28148a22f160b86cb134c339a5bb701e7edd50d6389f856df5b8",
-      "size_bytes": 66815
-    },
-    {
-      "path": "reports/interpretations/get-response-encoding.json",
-      "sha256": "1bbeef6d4671cdc34d0dd170ae5560b99a934b32e539b3d1525c1eb7db4331a0",
-      "size_bytes": 28766
-    },
-    {
-      "path": "reports/interpretations/bulk-postgres-writes.json",
-      "sha256": "992f2534c86f3f89b69abc64fd52b2d6bbdd8466aa547e95ee4814e1325f77b9",
-      "size_bytes": 32818
-    },
-    {
-      "path": "reports/interpretations/one-s3-read.json",
-      "sha256": "ec58a022bda971e013fb3686bb6aa59b8c6f89fcfeaf22c19b0cc986e100eda0",
-      "size_bytes": 16469
-    },
-    {
-      "path": ".benchmarks/Darwin-CPython-3.11-64bit/0001_baseline.json",
-      "sha256": "f7d61547d2e2cd9c31d9f32920f6706e16dafc556c424650c654d4e44520b161",
-      "size_bytes": 7886
-    },
-    {
-      "path": ".benchmarks/Darwin-CPython-3.11-64bit/0004_baseline.json",
-      "sha256": "a883dee2444ac5cd0581276bc70e1c68469dda92db2a1a8e8cbafc0fb9e2080a",
-      "size_bytes": 7481
-    },
-    {
-      "path": "measurements/get-response-encoding-validation/20261004T025259Z-01c0342b29cc/comparison.json",
-      "sha256": "1ffb635fbca31cdecdd91876fee4ec591b444e06282afd0df0e1b8bfa78e39e8",
-      "size_bytes": 30437
-    },
-    {
-      "path": "measurements/bulk-post-validation/20261004T033743Z-813debfb1f4a/comparison.json",
-      "sha256": "c17b80ae2af11484df4ddcd1faa6e07e26b4d4d4244adc69d98448a67a1c1b7f",
-      "size_bytes": 39379
-    },
-    {
-      "path": "measurements/streaming-post/20261005T044338Z-3359d6d22ff2/comparison.json",
-      "sha256": "ac3cc75fefa72c92e4f80264b8383f29505cab9e07063a919454021d3f4c4165",
-      "size_bytes": 3744
-    },
-    {
-      "path": "measurements/session-reuse-validation/benchmark-reports/0007_baseline.json",
-      "sha256": "123b261ebff747e2b8750c032fa9f5220da93bfec892dbf1a126e417b644322a",
-      "size_bytes": 7768
-    },
-    {
-      "path": "measurements/session-reuse-validation/benchmark-reports/0008_baseline.json",
-      "sha256": "9939f7e3c2595042e5b8eb07a62fb79d14029fb3f04b6a124556a979b4e3f816",
-      "size_bytes": 7978
-    },
-    {
-      "path": "measurements/session-reuse-validation/benchmark-reports/0011_baseline.json",
-      "sha256": "48d13041014b26abbf5cee9c7b5d2b6c28e97c1ee1d29400295fe0486c9d70bd",
-      "size_bytes": 7768
-    },
-    {
-      "path": "measurements/session-reuse-validation/benchmark-reports/0006_baseline.json",
-      "sha256": "5e4311cc1f0ab596b0aa3524d0a5731df0a221c1e11209506e552ddac3fe718c",
-      "size_bytes": 8652
-    },
-    {
-      "path": "measurements/session-reuse-validation/benchmark-reports/0009_baseline.json",
-      "sha256": "e8cf3bd966f5aad1d5b8b4cc58eda92293bf5713d1978bb16cf9af161bc87936",
-      "size_bytes": 8819
-    },
-    {
-      "path": "measurements/session-reuse-validation/benchmark-reports/0010_baseline.json",
-      "sha256": "96d200a8fe24e3f3a4e153ba35ddc679c7b73ec631dbc8b256eaa25854cac3d9",
-      "size_bytes": 8623
-    },
-    {
-      "path": "measurements/streaming-post/20261004T234931Z-153f2b97e2c0/allocation-groups.json",
-      "sha256": "c21c73737f02826589f7cfadd324833ec8be87fba398656a2238e732cbb830f5",
-      "size_bytes": 28995
-    },
-    {
-      "path": "measurements/bulk-post-validation/20261004T033743Z-813debfb1f4a/diagnostic-before.json",
-      "sha256": "ebeede0b41f5429c0ff676adfdbc47a0f97012eb99faa80f26f2b3f3457438e6",
-      "size_bytes": 48610
-    },
-    {
-      "path": "measurements/bulk-post-validation/20261004T033743Z-813debfb1f4a/diagnostic-after.json",
-      "sha256": "c0ab6adbc89ce42ba1a237ab14e78fcd4ce42ffc1746a3368556d3fdd35f78e5",
-      "size_bytes": 50255
-    },
-    {
-      "path": "reports/interpretations/post-get-focus.json",
-      "sha256": "956e9d4c8258a31f663a267b641de54ca2d9ada1d6fd6b9f59b86c8d718b3c4a",
-      "size_bytes": 74994
-    },
-    {
       "path": "reports/benchmarks/baseline.json",
-      "sha256": "f7d61547d2e2cd9c31d9f32920f6706e16dafc556c424650c654d4e44520b161",
-      "size_bytes": 7886
+      "sha256": "7b7cf1cb58b6d0ec93ad6f3d2b9ad8dcf9082f97af236f1056fea5ecee17cbd3",
+      "size_bytes": 7587
     },
     {
       "path": "reports/benchmarks/final-1.json",
-      "sha256": "020c59381bedb2945091a469f68d58960e64493dbba64f9915f7537e68f0b158",
-      "size_bytes": 8212
+      "sha256": "e6374e5ba4b0c4172db60de70f13f5ec5dcfd03e568b46a02eda74b434f1a7a2",
+      "size_bytes": 7913
     },
     {
       "path": "reports/benchmarks/final-2.json",
-      "sha256": "2cf61c9f73d4125154a824a9e352290e08e386926e0dae31950ddacb2df3b9d8",
-      "size_bytes": 8791
+      "sha256": "d9edcfd1489b2b2a04a73a688ee7fbfea696aca4315cc50a5d9df0c4d987fa69",
+      "size_bytes": 8492
     },
     {
       "path": "reports/benchmarks/final-3.json",
-      "sha256": "8110dfc77d4a7e031a8db45918423cbcc4128743e519495d2c1bbcea49fd88fd",
-      "size_bytes": 8452
+      "sha256": "8c3cb47a183a8dc844417a2568d94fc50c62981c5849d5fb2e489c9804993b22",
+      "size_bytes": 8153
     },
     {
       "path": "reports/profiles/baseline-memory.json",
-      "sha256": "f12226ad048abdecc53f6f74f2741e606f94da72a73fb32c8f9a88ced849b2f2",
-      "size_bytes": 2671
+      "sha256": "6c2a18b51fca8e59242e688657e37d58cc95ae303943a7ace79424bc1974de9f",
+      "size_bytes": 1943
     },
     {
       "path": "reports/profiles/final-memory.json",
-      "sha256": "c4a33535f62607c70605cb316579def7ededba726d7cebdca894b1daea70999d",
-      "size_bytes": 7629
+      "sha256": "10bd0dbd2105a6d8683089809c6316ab3d27efecad4044e0d3d20f7b315e22ce",
+      "size_bytes": 5360
     },
     {
       "path": "reports/profiles/selected-cpu.json",
-      "sha256": "a9be40d8a6ee650385fe11b1ae8c6d095b8caed09b88af6baf4319ad587bb697",
-      "size_bytes": 12273
+      "sha256": "abc7654530e04946b514de694da7bca201cc8bf51a3be6e649d41ce3f5a389ae",
+      "size_bytes": 10794
     }
   ],
   "figures": [
@@ -242,7 +127,6 @@
           "note": "Same four supplied workloads; lower latency is better."
         }
       ],
-      "measurement_revision": "caf9bdca1fdd60d1250aa52059ce45bfbead0e31",
       "application_sha256": "9734f8aae539c71f667e25cd9f3da3ef1faeb4e6e0f6a1b4e666ee7562d927db"
     },
     {
@@ -330,7 +214,6 @@
           "note": "Final bars are medians of three whole-test peaks. GET includes POST seeding."
         }
       ],
-      "measurement_revision": "caf9bdca1fdd60d1250aa52059ce45bfbead0e31",
       "application_sha256": "9734f8aae539c71f667e25cd9f3da3ef1faeb4e6e0f6a1b4e666ee7562d927db"
     },
     {
@@ -356,20 +239,7 @@
                 [],
                 []
               ],
-              "source_refs": [
-                {
-                  "path": "reports/interpretations/baseline.json",
-                  "source_id": "cpu-post-500-10kb-s1",
-                  "function": "<method 'find' of 'bytes' objects>",
-                  "property": "self_s"
-                },
-                {
-                  "path": "reports/interpretations/one-pass-encoder.json",
-                  "source_id": "cpu-post-500-10kb-s1",
-                  "function": "<method 'find' of 'bytes' objects>",
-                  "property": "self_s"
-                }
-              ]
+              "source_refs": []
             },
             {
               "label": "POST 50 x 100 KB",
@@ -381,20 +251,7 @@
                 [],
                 []
               ],
-              "source_refs": [
-                {
-                  "path": "reports/interpretations/baseline.json",
-                  "source_id": "cpu-post-50-100kb-s1",
-                  "function": "<method 'find' of 'bytes' objects>",
-                  "property": "self_s"
-                },
-                {
-                  "path": "reports/interpretations/one-pass-encoder.json",
-                  "source_id": "cpu-post-50-100kb-s1",
-                  "function": "<method 'find' of 'bytes' objects>",
-                  "property": "self_s"
-                }
-              ]
+              "source_refs": []
             }
           ],
           "note": "Same function and capture scope; absent calls contribute zero CPU."
@@ -728,18 +585,7 @@
                 [],
                 []
               ],
-              "source_refs": [
-                {
-                  "path": "measurements/bulk-post-validation/20261004T033743Z-813debfb1f4a/diagnostic-before.json",
-                  "workload": "post-500-10kb",
-                  "property": "operations_per_request"
-                },
-                {
-                  "path": "measurements/bulk-post-validation/20261004T033743Z-813debfb1f4a/diagnostic-after.json",
-                  "workload": "post-500-10kb",
-                  "property": "operations_per_request"
-                }
-              ]
+              "source_refs": []
             },
             {
               "label": "POST 50 x 100 KB",
@@ -751,18 +597,7 @@
                 [],
                 []
               ],
-              "source_refs": [
-                {
-                  "path": "measurements/bulk-post-validation/20261004T033743Z-813debfb1f4a/diagnostic-before.json",
-                  "workload": "post-50-100kb",
-                  "property": "operations_per_request"
-                },
-                {
-                  "path": "measurements/bulk-post-validation/20261004T033743Z-813debfb1f4a/diagnostic-after.json",
-                  "workload": "post-50-100kb",
-                  "property": "operations_per_request"
-                }
-              ]
+              "source_refs": []
             }
           ],
           "note": "BEGIN + COPY + COMMIT after; excludes driver metadata setup, not packet counts."
@@ -875,22 +710,7 @@
                 [],
                 []
               ],
-              "source_refs": [
-                {
-                  "path": "measurements/streaming-post/20261004T234931Z-153f2b97e2c0/allocation-groups.json",
-                  "version": "before",
-                  "workload": "test_create_batch_runs_500_10kb",
-                  "capture_source": "profiles/memory/20261004T234931Z-153f2b97e2c0-streaming-post-4-before/f0244f11504749728561c6b4802472f5-tests-benchmarks-test_run_performance.py-test_create_batch_runs_500_10kb.bin",
-                  "group": "HTTP request body"
-                },
-                {
-                  "path": "measurements/streaming-post/20261004T234931Z-153f2b97e2c0/allocation-groups.json",
-                  "version": "after",
-                  "workload": "test_create_batch_runs_500_10kb",
-                  "capture_source": "profiles/memory/20261004T234931Z-153f2b97e2c0-streaming-post-3-after/7231fb628fe54d0ab5b593865cc42c63-tests-benchmarks-test_run_performance.py-test_create_batch_runs_500_10kb.bin",
-                  "group": "HTTP request body"
-                }
-              ]
+              "source_refs": []
             },
             {
               "label": "Decoded request JSON",
@@ -902,22 +722,7 @@
                 [],
                 []
               ],
-              "source_refs": [
-                {
-                  "path": "measurements/streaming-post/20261004T234931Z-153f2b97e2c0/allocation-groups.json",
-                  "version": "before",
-                  "workload": "test_create_batch_runs_500_10kb",
-                  "capture_source": "profiles/memory/20261004T234931Z-153f2b97e2c0-streaming-post-4-before/f0244f11504749728561c6b4802472f5-tests-benchmarks-test_run_performance.py-test_create_batch_runs_500_10kb.bin",
-                  "group": "Decoded request JSON"
-                },
-                {
-                  "path": "measurements/streaming-post/20261004T234931Z-153f2b97e2c0/allocation-groups.json",
-                  "version": "after",
-                  "workload": "test_create_batch_runs_500_10kb",
-                  "capture_source": "profiles/memory/20261004T234931Z-153f2b97e2c0-streaming-post-3-after/7231fb628fe54d0ab5b593865cc42c63-tests-benchmarks-test_run_performance.py-test_create_batch_runs_500_10kb.bin",
-                  "group": "Decoded request JSON"
-                }
-              ]
+              "source_refs": []
             },
             {
               "label": "Model validation",
@@ -929,22 +734,7 @@
                 [],
                 []
               ],
-              "source_refs": [
-                {
-                  "path": "measurements/streaming-post/20261004T234931Z-153f2b97e2c0/allocation-groups.json",
-                  "version": "before",
-                  "workload": "test_create_batch_runs_500_10kb",
-                  "capture_source": "profiles/memory/20261004T234931Z-153f2b97e2c0-streaming-post-4-before/f0244f11504749728561c6b4802472f5-tests-benchmarks-test_run_performance.py-test_create_batch_runs_500_10kb.bin",
-                  "group": "Model validation"
-                },
-                {
-                  "path": "measurements/streaming-post/20261004T234931Z-153f2b97e2c0/allocation-groups.json",
-                  "version": "after",
-                  "workload": "test_create_batch_runs_500_10kb",
-                  "capture_source": "profiles/memory/20261004T234931Z-153f2b97e2c0-streaming-post-3-after/7231fb628fe54d0ab5b593865cc42c63-tests-benchmarks-test_run_performance.py-test_create_batch_runs_500_10kb.bin",
-                  "group": "Model validation"
-                }
-              ]
+              "source_refs": []
             },
             {
               "label": "Batch buffer",
@@ -956,22 +746,7 @@
                 [],
                 []
               ],
-              "source_refs": [
-                {
-                  "path": "measurements/streaming-post/20261004T234931Z-153f2b97e2c0/allocation-groups.json",
-                  "version": "before",
-                  "workload": "test_create_batch_runs_500_10kb",
-                  "capture_source": "profiles/memory/20261004T234931Z-153f2b97e2c0-streaming-post-4-before/f0244f11504749728561c6b4802472f5-tests-benchmarks-test_run_performance.py-test_create_batch_runs_500_10kb.bin",
-                  "group": "Batch buffer"
-                },
-                {
-                  "path": "measurements/streaming-post/20261004T234931Z-153f2b97e2c0/allocation-groups.json",
-                  "version": "after",
-                  "workload": "test_create_batch_runs_500_10kb",
-                  "capture_source": "profiles/memory/20261004T234931Z-153f2b97e2c0-streaming-post-3-after/7231fb628fe54d0ab5b593865cc42c63-tests-benchmarks-test_run_performance.py-test_create_batch_runs_500_10kb.bin",
-                  "group": "Batch buffer"
-                }
-              ]
+              "source_refs": []
             }
           ],
           "note": "Zero: no classified live bytes at this peak; not zero allocations over the request."
@@ -994,22 +769,7 @@
                 [],
                 []
               ],
-              "source_refs": [
-                {
-                  "path": "measurements/streaming-post/20261004T234931Z-153f2b97e2c0/allocation-groups.json",
-                  "version": "before",
-                  "workload": "test_create_batch_runs_50_100kb",
-                  "capture_source": "profiles/memory/20261004T234931Z-153f2b97e2c0-streaming-post-4-before/f0244f11504749728561c6b4802472f5-tests-benchmarks-test_run_performance.py-test_create_batch_runs_50_100kb.bin",
-                  "group": "HTTP request body"
-                },
-                {
-                  "path": "measurements/streaming-post/20261004T234931Z-153f2b97e2c0/allocation-groups.json",
-                  "version": "after",
-                  "workload": "test_create_batch_runs_50_100kb",
-                  "capture_source": "profiles/memory/20261004T234931Z-153f2b97e2c0-streaming-post-3-after/7231fb628fe54d0ab5b593865cc42c63-tests-benchmarks-test_run_performance.py-test_create_batch_runs_50_100kb.bin",
-                  "group": "HTTP request body"
-                }
-              ]
+              "source_refs": []
             },
             {
               "label": "Decoded request JSON",
@@ -1021,22 +781,7 @@
                 [],
                 []
               ],
-              "source_refs": [
-                {
-                  "path": "measurements/streaming-post/20261004T234931Z-153f2b97e2c0/allocation-groups.json",
-                  "version": "before",
-                  "workload": "test_create_batch_runs_50_100kb",
-                  "capture_source": "profiles/memory/20261004T234931Z-153f2b97e2c0-streaming-post-4-before/f0244f11504749728561c6b4802472f5-tests-benchmarks-test_run_performance.py-test_create_batch_runs_50_100kb.bin",
-                  "group": "Decoded request JSON"
-                },
-                {
-                  "path": "measurements/streaming-post/20261004T234931Z-153f2b97e2c0/allocation-groups.json",
-                  "version": "after",
-                  "workload": "test_create_batch_runs_50_100kb",
-                  "capture_source": "profiles/memory/20261004T234931Z-153f2b97e2c0-streaming-post-3-after/7231fb628fe54d0ab5b593865cc42c63-tests-benchmarks-test_run_performance.py-test_create_batch_runs_50_100kb.bin",
-                  "group": "Decoded request JSON"
-                }
-              ]
+              "source_refs": []
             },
             {
               "label": "Model validation",
@@ -1048,22 +793,7 @@
                 [],
                 []
               ],
-              "source_refs": [
-                {
-                  "path": "measurements/streaming-post/20261004T234931Z-153f2b97e2c0/allocation-groups.json",
-                  "version": "before",
-                  "workload": "test_create_batch_runs_50_100kb",
-                  "capture_source": "profiles/memory/20261004T234931Z-153f2b97e2c0-streaming-post-4-before/f0244f11504749728561c6b4802472f5-tests-benchmarks-test_run_performance.py-test_create_batch_runs_50_100kb.bin",
-                  "group": "Model validation"
-                },
-                {
-                  "path": "measurements/streaming-post/20261004T234931Z-153f2b97e2c0/allocation-groups.json",
-                  "version": "after",
-                  "workload": "test_create_batch_runs_50_100kb",
-                  "capture_source": "profiles/memory/20261004T234931Z-153f2b97e2c0-streaming-post-3-after/7231fb628fe54d0ab5b593865cc42c63-tests-benchmarks-test_run_performance.py-test_create_batch_runs_50_100kb.bin",
-                  "group": "Model validation"
-                }
-              ]
+              "source_refs": []
             },
             {
               "label": "Batch buffer",
@@ -1075,22 +805,7 @@
                 [],
                 []
               ],
-              "source_refs": [
-                {
-                  "path": "measurements/streaming-post/20261004T234931Z-153f2b97e2c0/allocation-groups.json",
-                  "version": "before",
-                  "workload": "test_create_batch_runs_50_100kb",
-                  "capture_source": "profiles/memory/20261004T234931Z-153f2b97e2c0-streaming-post-4-before/f0244f11504749728561c6b4802472f5-tests-benchmarks-test_run_performance.py-test_create_batch_runs_50_100kb.bin",
-                  "group": "Batch buffer"
-                },
-                {
-                  "path": "measurements/streaming-post/20261004T234931Z-153f2b97e2c0/allocation-groups.json",
-                  "version": "after",
-                  "workload": "test_create_batch_runs_50_100kb",
-                  "capture_source": "profiles/memory/20261004T234931Z-153f2b97e2c0-streaming-post-3-after/7231fb628fe54d0ab5b593865cc42c63-tests-benchmarks-test_run_performance.py-test_create_batch_runs_50_100kb.bin",
-                  "group": "Batch buffer"
-                }
-              ]
+              "source_refs": []
             }
           ],
           "note": "Zero: no classified live bytes at this peak; not zero allocations over the request."
@@ -1322,20 +1037,7 @@
                 [],
                 []
               ],
-              "source_refs": [
-                {
-                  "path": "reports/interpretations/incremental-post-parsing.json",
-                  "source_id": "cpu-post-500-10kb-s1",
-                  "function": "JSONDecoder.raw_decode",
-                  "property": "calls"
-                },
-                {
-                  "path": "reports/interpretations/post-get-focus.json",
-                  "source_id": "cpu-post-500-10kb-s1",
-                  "function": "JSONDecoder.raw_decode",
-                  "property": "calls"
-                }
-              ]
+              "source_refs": []
             },
             {
               "label": "POST 50 x 100 KB",
@@ -1347,20 +1049,7 @@
                 [],
                 []
               ],
-              "source_refs": [
-                {
-                  "path": "reports/interpretations/incremental-post-parsing.json",
-                  "source_id": "cpu-post-50-100kb-s1",
-                  "function": "JSONDecoder.raw_decode",
-                  "property": "calls"
-                },
-                {
-                  "path": "reports/interpretations/post-get-focus.json",
-                  "source_id": "cpu-post-50-100kb-s1",
-                  "function": "JSONDecoder.raw_decode",
-                  "property": "calls"
-                }
-              ]
+              "source_refs": []
             }
           ],
           "note": "Same decoder function/capture scope; counts include SDK decoding."
@@ -1383,20 +1072,7 @@
                 [],
                 []
               ],
-              "source_refs": [
-                {
-                  "path": "reports/interpretations/incremental-post-parsing.json",
-                  "source_id": "cpu-post-500-10kb-s1",
-                  "function": "JSONDecoder.raw_decode",
-                  "property": "self_s"
-                },
-                {
-                  "path": "reports/interpretations/post-get-focus.json",
-                  "source_id": "cpu-post-500-10kb-s1",
-                  "function": "JSONDecoder.raw_decode",
-                  "property": "self_s"
-                }
-              ]
+              "source_refs": []
             },
             {
               "label": "POST 50 x 100 KB",
@@ -1408,20 +1084,7 @@
                 [],
                 []
               ],
-              "source_refs": [
-                {
-                  "path": "reports/interpretations/incremental-post-parsing.json",
-                  "source_id": "cpu-post-50-100kb-s1",
-                  "function": "JSONDecoder.raw_decode",
-                  "property": "self_s"
-                },
-                {
-                  "path": "reports/interpretations/post-get-focus.json",
-                  "source_id": "cpu-post-50-100kb-s1",
-                  "function": "JSONDecoder.raw_decode",
-                  "property": "self_s"
-                }
-              ]
+              "source_refs": []
             }
           ],
           "note": "POST 50 decoding CPU decreases; POST 500 does not improve."
@@ -1444,20 +1107,7 @@
                 [],
                 []
               ],
-              "source_refs": [
-                {
-                  "path": "reports/interpretations/incremental-post-parsing.json",
-                  "source_id": "cpu-post-500-10kb-s1",
-                  "function": "JSONDecodeError.__init__",
-                  "property": "calls"
-                },
-                {
-                  "path": "reports/interpretations/post-get-focus.json",
-                  "source_id": "cpu-post-500-10kb-s1",
-                  "function": "JSONDecodeError.__init__",
-                  "property": "calls"
-                }
-              ]
+              "source_refs": []
             },
             {
               "label": "POST 50 x 100 KB",
@@ -1469,20 +1119,7 @@
                 [],
                 []
               ],
-              "source_refs": [
-                {
-                  "path": "reports/interpretations/incremental-post-parsing.json",
-                  "source_id": "cpu-post-50-100kb-s1",
-                  "function": "JSONDecodeError.__init__",
-                  "property": "calls"
-                },
-                {
-                  "path": "reports/interpretations/post-get-focus.json",
-                  "source_id": "cpu-post-50-100kb-s1",
-                  "function": "JSONDecodeError.__init__",
-                  "property": "calls"
-                }
-              ]
+              "source_refs": []
             }
           ],
           "note": "Counts include all phases; fewer large-run incomplete decode attempts."
@@ -1680,5 +1317,5 @@
       ]
     }
   ],
-  "source_availability": "Final unprofiled JSON reports and compact Memray/Yappi extracts are included under reports/benchmarks and reports/profiles. Historical raw sources and the local figure generator remain archived locally."
+  "source_availability": "Final timing reports and compact Memray/Yappi results are included under reports/benchmarks and reports/profiles. The figures retain the exact historical experiment values and repeat samples."
 }

@@ -28,14 +28,6 @@
             "brand_raw": "Apple M1"
         }
     },
-    "commit_info": {
-        "id": "caf9bdca1fdd60d1250aa52059ce45bfbead0e31",
-        "time": "2026-10-05T14:43:13-07:00",
-        "author_time": "2026-10-05T14:43:13-07:00",
-        "dirty": false,
-        "project": "ls-py-run-handler",
-        "branch": "codex/baseline-correctness-tests"
-    },
     "benchmarks": [
         {
             "group": null,

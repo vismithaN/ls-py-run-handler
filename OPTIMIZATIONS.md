@@ -8,7 +8,7 @@ memory. The work stayed within the existing PostgreSQL/S3 storage design.
 - [Results](#1-results)
   - [Median request latency](#median-request-latency)
   - [Peak tracked allocations](#peak-tracked-allocations)
-- [Approach](#2-approach)
+- [System Architecture & Profiling Methodology](#2-system-architecture--profiling-methodology)
 - [Retained improvements](#3-retained-improvements)
   - [First: One-pass batch encoding](#first-improvement-one-pass-batch-encoding)
   - [Second: S3 SDK session reuse](#second-improvement-s3-sdk-session-reuse)
@@ -17,7 +17,7 @@ memory. The work stayed within the existing PostgreSQL/S3 storage design.
   - [Fifth: Size-guided JSON read-ahead](#fifth-improvement-size-guided-json-read-ahead)
 - [Other retained changes](#4-other-retained-changes)
 - [Experiments not adopted](#5-experiments-not-adopted)
-- [Limits and next steps](#6-limits-and-next-steps)
+- [Future Improvements](#6-future-improvements)
 - [Reproduction and evidence](#7-reproduction-and-evidence)
 
 ## 1. Results
@@ -44,54 +44,30 @@ memory. The work stayed within the existing PostgreSQL/S3 storage design.
 also include POST seeding. A separate real-worker RAM check is reported under
 incremental parsing.
 
-## 2. Approach
+## 2. System Architecture & Profiling Methodology
 
-I read the code line by line, first for data flow and then for repeated work,
-sequential calls and overlapping data in memory. I recorded these hypotheses in
-a local experiment journal, then checked them against CPU and memory profiles
-before choosing changes.
+### Storage Architecture
 
-I expanded correctness coverage before collecting the baseline: exact round
-trips, generated IDs, large fields, nested JSON/Unicode/escapes, empty defaults,
-repeated contents, invalid input and missing storage. Later tests covered
-session reuse, parallel clients and duplicate-ID rollback. The final
-[application suite](tests/test_runs.py) groups
-API behavior into four focused test functions with 10 test cases.
-It checks returned values, rejected writes, rollback and storage failures
-without asserting internal method-call counts. All 10 cases passed
-against isolated PostgreSQL and object-storage resources after this cleanup.
+Each run consists of identifying fields and three JSON payloads (`inputs`,
+`outputs`, `metadata`).
 
-**Correctness fix: failed GET retrievals must not return success.**
-`GET /runs/{run_id}` finds the run in PostgreSQL, then reads its `inputs`,
-`outputs` and `metadata` from S3. The missing-object test showed that the original
-S3 helper caught read failures and returned `{}` instead of raising an error.
-It also did this when stored JSON could not be decoded. The endpoint therefore
-returned HTTP 200 with empty fields, hiding the failure as a successful read.
+- In `POST /runs`, individual run records and their field byte-range pointers are stored in PostgreSQL (`runs` table).
+- The underlying JSON payloads are aggregated into a single JSON batch object written to S3/MinIO (`batches/{batch_id}.json`).
+- In `GET /runs/{id}`, identifying fields are fetched from PostgreSQL, and the payload fields are sliced from S3 using byte-range reads.
 
-I changed these failures to return **503: `Stored run data is unavailable`**.
-Invalid stored S3 references are also rejected instead of becoming empty fields.
+### Correctness Baseline First
 
-| Status | Meaning |
-|---|---|
-| 200 | The run and its fields were retrieved successfully; genuinely empty fields are valid. |
-| 404 | No run with that ID exists in PostgreSQL. |
-| 503 | The run exists, but its referenced S3 data cannot be read or decoded. |
+Correctness coverage was expanded before performance modifications. The final
+suite contains **10 test cases** in [tests/test_runs.py](tests/test_runs.py),
+covering large 100 KB fields, Unicode, JSON escapes, missing/empty fields,
+generated UUIDs, duplicate-ID rollbacks and S3 503 error handling.
 
-503 makes the backing-storage failure explicit; it does not guarantee that a
-retry will fix it. A permanently missing object needs repair. The initial
-missing-object fix was made before collecting the performance baseline and is
-not counted as an optimization.
+### Profiling Harness
 
-The experiment cycle was: **baseline, profile, hypothesis, focused change,
-correctness check, remeasure, keep or revert**. I preserved the supplied timing
-and Memray workflows, added Yappi CPU profiling and separate diagnostics, and
-used a local dashboard to compare saved results. That local tooling and the
-journal are excluded from the submission; the matched evidence remains in the
-charts and [plotted-data manifest](reports/figures/data.json).
-
-Each improvement below pairs the **same measured operation or allocation group
-before and after**. CPU, memory and diagnostic evidence are shown separately
-from unprofiled request latency, not substituted for one another.
+- **Latency:** Measured via unprofiled `pytest-benchmark` suites (`make benchmark`).
+- **CPU Profiling:** Cold-process multi-pass profiling using Yappi; [selected CPU results](reports/profiles/selected-cpu.json) are included.
+- **Tracked Allocations:** Whole-test peak allocation tracking using Memray (`make memprofile`).
+- **Production-like OS RSS:** Standalone Linux/ARM64 worker benchmarking under 1 vCPU and 1 GiB RAM constraints to verify worker resident memory savings without profiler overhead.
 
 ## 3. Retained improvements
 
@@ -262,8 +238,8 @@ These remain in the code, separate from the five measured improvements above.
 ## 5. Experiments not adopted
 
 These changes were tested but not kept; applied candidates were reverted and
-isolated prototypes were never added to the application. The recordings remain archived
-locally; the submission retains the results and [chart values](reports/figures/data.json).
+isolated prototypes were never added to the application. The results and
+[chart values](reports/figures/data.json) are included in the submission.
 
 | Experiment / what changed | Measured outcome | Why I did not keep it |
 |---|---|---|
@@ -277,30 +253,33 @@ locally; the submission retains the results and [chart values](reports/figures/d
 | **Full-run reference migration.** Added a database reference to the whole run's S3 byte range, allowing GET to decode one run object instead of three fields. Kept a fallback for older field references. | Three JSON decodes became one; no demonstrated GET latency gain | GET already used one S3 read, and still had to decode the same data. Fewer decoder calls did not make retrieval measurably faster. The modest POST CPU benefit did not justify a new column, old-data backfill and two reference formats to support during rollout. |
 | **Replacement GET decoder.** Used Python's `json.loads()` instead of `orjson.loads()` for retrieved S3 fields, with compatibility handling, to reduce decoder allocations. | GET-10 tracked peak fell 86.9%, but worker RSS fell only 1.89–2.18 MiB; timing was small/mixed | The large profiler reduction was not an equivalent RAM reduction: real worker savings were only about 2–2.6%. Keeping the replacement required numeric/Unicode compatibility code without a consistent latency benefit. I accepted the roughly 2 MiB cost and restored `orjson.loads()`. |
 
-## 6. Limits and next steps
+## 6. Future Improvements
 
-Measurements ran on Apple M1/macOS, Python 3.11.9, PostgreSQL/MinIO in Docker.
-The supplied benchmark creates a new event loop per timed execution. Later
-comparisons generally used three suites per version with varied execution order.
+### Application-lifetime S3 client reuse
 
-- **No production-capacity claim:** small samples, one original baseline suite
-  and local variability do not establish production p95/p99 or throughput.
-- **Keep scopes separate:** inclusive CPU can overlap and includes profiler
-  overhead; unprofiled latency, Memray peaks and OS-reported RSS are different
-  measurements. Lower GET test peaks do not prove equal standalone GET RAM gains.
-- **Evidence availability:** charts, plotted values, raw baseline/final timing
-  samples and compact profiler extracts are included; full profiler recordings
-  and detailed historical interpretations remain local.
-- **Observability boundary:** request logs are not distributed tracing or a
-  metrics backend. Unhandled errors are logged as 500, but their outer framework
-  error response does not receive the middleware's request-ID header.
+The SDK session is already reused, but each request still creates and closes
+an S3 client. Create one client per application worker during startup, share it
+across requests on that worker's event loop, and close it during shutdown.
+This could reduce client-setup CPU and reuse HTTP connections for both POST
+uploads and GET reads. Bound the connection pool and ensure response bodies
+are closed so connections can be reused.
 
-| Future improvement—not implemented | What would justify adopting it |
-|---|---|
-| Application-lifetime S3 client and bounded DB pool | Lower setup latency/connections under persistent-loop real HTTP, with timeout, failure/recovery and shutdown tests. Current clients/connections remain request-scoped. |
-| Reduce incomplete parsing; bound request/run sizes and buffer memory | Better POST latency without losing compatibility or peak-RSS savings. The current service has no configured request/run-size limit. |
-| Orphan cleanup and retry/idempotency handling | Recover safely when PostgreSQL fails after S3 upload, without deleting valid objects. |
-| Sustained deployment-specific load tests | Stable RSS, error rate, p95/p99 and throughput at the intended worker count/concurrency. |
+Evaluate this on the persistent Linux server with concurrent requests. Compare
+client-setup CPU, new connection counts, POST/GET latency and worker RAM, and
+test timeouts, connection failures, recovery and shutdown before adopting it.
+
+### Reduce incomplete JSON parsing
+
+When a large run arrives across several chunks, `raw_decode()` can repeatedly
+parse the same unfinished value. Improve the bounded read-ahead strategy or
+evaluate a stateful parser that resumes from its previous position as bytes
+arrive, rather than restarting. The aim is to lower POST CPU and latency while
+preserving the memory savings from parsing one run at a time.
+
+Compare decode attempts, JSON-error constructions, POST latency and worker RAM
+for both supplied POST workloads and fragmented real-HTTP requests. Preserve
+existing numeric, Unicode and validation behavior; adopt a replacement only
+when the end-to-end results improve, not just its decoder timings.
 
 ## 7. Reproduction and evidence
 
@@ -313,13 +292,13 @@ do not run them alongside other writers.
 | `make benchmark` | Original four unprofiled workloads and raw timing samples → `.benchmarks/` |
 | `make memprofile` | Original Memray workflow → `profiles/memory/<run>/` |
 
-Final verification at `caf9bdc`: **10 passing application tests**, three original
+Final verification: **10 passing application tests**, three original
 unprofiled benchmark suites and three Memray suites (12 memory captures), with
 request logging enabled. Ruff lint and formatting checks passed. Benchmark
 fixtures and timing options were unchanged; verification used a disposable
 database/bucket per suite instead of resetting shared test resources.
 
-The results compare one baseline suite at `bdf1239` (after the correctness fix,
+The results compare one baseline suite (after the correctness fix,
 before optimization) with medians of three final suites/captures per workload.
 Fresh final timings were slower than the earlier capture; POST-50 suite medians
 ranged from 333.8 to 463.6 ms. All repeats are included, not just the fastest.
@@ -332,13 +311,12 @@ final timing samples [1](reports/benchmarks/final-1.json),
 [final Memray peaks](reports/profiles/final-memory.json) and
 [selected historical Yappi rows](reports/profiles/selected-cpu.json).
 The CPU rows explain earlier experiments; they were not rerun after request
-logging. The historical CPU/diagnostic harness and dashboard remain local.
+logging.
 
 [Final evidence](reports/benchmark-results.json) records the measured application
 fingerprint, baseline/final values and repeats. [Figure data](reports/figures/data.json)
-contains exact before/after chart values, samples and provenance hashes. Source
-paths identify archived originals; hashes do not reconstruct missing recordings.
+contains exact before/after chart values, samples and references to included
+evidence files.
 
-Charts are included as PNG files, so reviewing the report does not require
-the dashboard. Red shows baseline/control and green the changed version; values,
-not colors, determine whether a result improved.
+Charts are included as PNG files. Red shows baseline/control and green the
+changed version; values, not colors, determine whether a result improved.

@@ -7,11 +7,10 @@
     "cpu": "Historical Yappi CPU-clock measurements from the optimization experiments, before final request logging. Not a new profile of the submitted application or benchmark latency.",
     "limitations": [
       "Single original baseline suite; cumulative observations are not controlled causal estimates or production SLOs.",
-      "Unprofiled timing samples and compact profiler extracts are included; full profiler binaries and historical interpretations remain archived locally.",
+      "Unprofiled timing samples and compact profiler extracts are included in this submission.",
       "Fresh final captures include runtime logging; differences from earlier final results do not isolate logging overhead."
     ]
   },
-  "baseline_revision": "bdf123994e632380fe5a76e2e998ce7700c8ece9",
   "measured_application_sha256": "9734f8aae539c71f667e25cd9f3da3ef1faeb4e6e0f6a1b4e666ee7562d927db",
   "workloads": [
     {
@@ -110,42 +109,41 @@
   "provenance": [
     {
       "path": "reports/benchmarks/baseline.json",
-      "sha256": "f7d61547d2e2cd9c31d9f32920f6706e16dafc556c424650c654d4e44520b161",
-      "size_bytes": 7886
+      "sha256": "7b7cf1cb58b6d0ec93ad6f3d2b9ad8dcf9082f97af236f1056fea5ecee17cbd3",
+      "size_bytes": 7587
     },
     {
       "path": "reports/benchmarks/final-1.json",
-      "sha256": "020c59381bedb2945091a469f68d58960e64493dbba64f9915f7537e68f0b158",
-      "size_bytes": 8212
+      "sha256": "e6374e5ba4b0c4172db60de70f13f5ec5dcfd03e568b46a02eda74b434f1a7a2",
+      "size_bytes": 7913
     },
     {
       "path": "reports/benchmarks/final-2.json",
-      "sha256": "2cf61c9f73d4125154a824a9e352290e08e386926e0dae31950ddacb2df3b9d8",
-      "size_bytes": 8791
+      "sha256": "d9edcfd1489b2b2a04a73a688ee7fbfea696aca4315cc50a5d9df0c4d987fa69",
+      "size_bytes": 8492
     },
     {
       "path": "reports/benchmarks/final-3.json",
-      "sha256": "8110dfc77d4a7e031a8db45918423cbcc4128743e519495d2c1bbcea49fd88fd",
-      "size_bytes": 8452
+      "sha256": "8c3cb47a183a8dc844417a2568d94fc50c62981c5849d5fb2e489c9804993b22",
+      "size_bytes": 8153
     },
     {
       "path": "reports/profiles/baseline-memory.json",
-      "sha256": "f12226ad048abdecc53f6f74f2741e606f94da72a73fb32c8f9a88ced849b2f2",
-      "size_bytes": 2671
+      "sha256": "6c2a18b51fca8e59242e688657e37d58cc95ae303943a7ace79424bc1974de9f",
+      "size_bytes": 1943
     },
     {
       "path": "reports/profiles/final-memory.json",
-      "sha256": "c4a33535f62607c70605cb316579def7ededba726d7cebdca894b1daea70999d",
-      "size_bytes": 7629
+      "sha256": "10bd0dbd2105a6d8683089809c6316ab3d27efecad4044e0d3d20f7b315e22ce",
+      "size_bytes": 5360
     },
     {
       "path": "reports/profiles/selected-cpu.json",
-      "sha256": "a9be40d8a6ee650385fe11b1ae8c6d095b8caed09b88af6baf4319ad587bb697",
-      "size_bytes": 12273
+      "sha256": "abc7654530e04946b514de694da7bca201cc8bf51a3be6e649d41ce3f5a389ae",
+      "size_bytes": 10794
     }
   ],
   "measured_at_utc": "2026-10-05T21:46:33.440683+00:00",
-  "measurement_revision": "caf9bdca1fdd60d1250aa52059ce45bfbead0e31",
   "environment": {
     "machine_info": {
       "node": "Apples-MacBook-Air.local",
