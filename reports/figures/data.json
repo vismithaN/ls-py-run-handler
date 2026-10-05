@@ -98,6 +98,26 @@
       "path": "measurements/session-reuse-validation/benchmark-reports/0010_baseline.json",
       "sha256": "96d200a8fe24e3f3a4e153ba35ddc679c7b73ec631dbc8b256eaa25854cac3d9",
       "size_bytes": 8623
+    },
+    {
+      "path": "measurements/streaming-post/20261004T234931Z-153f2b97e2c0/allocation-groups.json",
+      "sha256": "c21c73737f02826589f7cfadd324833ec8be87fba398656a2238e732cbb830f5",
+      "size_bytes": 28995
+    },
+    {
+      "path": "measurements/bulk-post-validation/20261004T033743Z-813debfb1f4a/diagnostic-before.json",
+      "sha256": "ebeede0b41f5429c0ff676adfdbc47a0f97012eb99faa80f26f2b3f3457438e6",
+      "size_bytes": 48610
+    },
+    {
+      "path": "measurements/bulk-post-validation/20261004T033743Z-813debfb1f4a/diagnostic-after.json",
+      "sha256": "c0ab6adbc89ce42ba1a237ab14e78fcd4ce42ffc1746a3368556d3fdd35f78e5",
+      "size_bytes": 50255
+    },
+    {
+      "path": "reports/interpretations/post-get-focus.json",
+      "sha256": "956e9d4c8258a31f663a267b641de54ca2d9ada1d6fd6b9f59b86c8d718b3c4a",
+      "size_bytes": 74994
     }
   ],
   "figures": [
@@ -277,10 +297,104 @@
     {
       "id": "one-pass",
       "title": "First improvement: One-pass batch encoding",
-      "scope": "One original suite per stage; CPU medians of 3 cold processes; one Memray suite per stage.",
+      "scope": "Same Yappi function before/after (session 1); latency measured separately without a profiler.",
       "panels": [
         {
-          "title": "POST request median",
+          "title": "CPU: bytes.find self time",
+          "unit": "CPU seconds (self)",
+          "legend": [
+            "Corrected baseline",
+            "One-pass batch encoding"
+          ],
+          "rows": [
+            {
+              "label": "POST 500 x 10 KB",
+              "values": [
+                1.034662,
+                0
+              ],
+              "samples": [
+                [],
+                []
+              ],
+              "source_refs": [
+                {
+                  "path": "reports/interpretations/baseline.json",
+                  "source_id": "cpu-post-500-10kb-s1",
+                  "function": "<method 'find' of 'bytes' objects>",
+                  "property": "self_s"
+                },
+                {
+                  "path": "reports/interpretations/one-pass-encoder.json",
+                  "source_id": "cpu-post-500-10kb-s1",
+                  "function": "<method 'find' of 'bytes' objects>",
+                  "property": "self_s"
+                }
+              ]
+            },
+            {
+              "label": "POST 50 x 100 KB",
+              "values": [
+                0.211245,
+                0
+              ],
+              "samples": [
+                [],
+                []
+              ],
+              "source_refs": [
+                {
+                  "path": "reports/interpretations/baseline.json",
+                  "source_id": "cpu-post-50-100kb-s1",
+                  "function": "<method 'find' of 'bytes' objects>",
+                  "property": "self_s"
+                },
+                {
+                  "path": "reports/interpretations/one-pass-encoder.json",
+                  "source_id": "cpu-post-50-100kb-s1",
+                  "function": "<method 'find' of 'bytes' objects>",
+                  "property": "self_s"
+                }
+              ]
+            }
+          ],
+          "note": "Same function and capture scope; absent calls contribute zero CPU."
+        },
+        {
+          "title": "CPU: bytes.find calls",
+          "unit": "calls",
+          "legend": [
+            "Corrected baseline",
+            "One-pass batch encoding"
+          ],
+          "rows": [
+            {
+              "label": "POST 500 x 10 KB",
+              "values": [
+                1500,
+                0
+              ],
+              "samples": [
+                [],
+                []
+              ]
+            },
+            {
+              "label": "POST 50 x 100 KB",
+              "values": [
+                150,
+                0
+              ],
+              "samples": [
+                [],
+                []
+              ]
+            }
+          ],
+          "note": "Session-1 profiles. Offset recording removes bytes.find."
+        },
+        {
+          "title": "Benchmark: POST median latency",
           "unit": "ms",
           "legend": [
             "Corrected baseline",
@@ -313,40 +427,7 @@
           "note": "Named raw-sample reports: 0001_baseline and 0004_baseline."
         },
         {
-          "title": "Cold first-request CPU",
-          "unit": "CPU seconds",
-          "legend": [
-            "Corrected baseline",
-            "One-pass batch encoding"
-          ],
-          "rows": [
-            {
-              "label": "POST 500 x 10 KB",
-              "values": [
-                1.770919,
-                0.725392
-              ],
-              "samples": [
-                [],
-                []
-              ]
-            },
-            {
-              "label": "POST 50 x 100 KB",
-              "values": [
-                0.77672,
-                0.547247
-              ],
-              "samples": [
-                [],
-                []
-              ]
-            }
-          ],
-          "note": "Profiler overhead is included; not unprofiled request latency."
-        },
-        {
-          "title": "Whole-test tracked peak",
+          "title": "Memray: whole-test tracked peak",
           "unit": "MiB",
           "legend": [
             "Corrected baseline",
@@ -377,41 +458,9 @@
             }
           ],
           "note": "Includes test data and client allocations; not worker RSS."
-        },
-        {
-          "title": "Full-batch search calls",
-          "unit": "calls",
-          "legend": [
-            "Corrected baseline",
-            "One-pass batch encoding"
-          ],
-          "rows": [
-            {
-              "label": "POST 500 x 10 KB",
-              "values": [
-                1500,
-                0
-              ],
-              "samples": [
-                [],
-                []
-              ]
-            },
-            {
-              "label": "POST 50 x 100 KB",
-              "values": [
-                150,
-                0
-              ],
-              "samples": [
-                [],
-                []
-              ]
-            }
-          ],
-          "note": "Session-1 profiles. Offset recording removes bytes.find."
         }
-      ]
+      ],
+      "evidence_pairing": "Each panel compares the same metric, unit, workload and sampling method; CPU/memory/diagnostic/latency panels are separate."
     },
     {
       "id": "session-reuse",
@@ -587,10 +636,100 @@
     {
       "id": "copy",
       "title": "Third improvement: Transactional bulk PostgreSQL writes",
-      "scope": "3 original suites per version, alternating before-after-after-before-before-after.",
+      "scope": "Same DB phase/count diagnostics before/after; 3 unprofiled benchmark suites per version.",
       "panels": [
         {
-          "title": "POST request median",
+          "title": "Diagnostic: DB-write elapsed time",
+          "unit": "ms",
+          "legend": [
+            "Sequential INSERT",
+            "Transactional COPY"
+          ],
+          "rows": [
+            {
+              "label": "POST 500 x 10 KB",
+              "values": [
+                226.620708,
+                12.645042
+              ],
+              "samples": [
+                [],
+                []
+              ]
+            },
+            {
+              "label": "POST 50 x 100 KB",
+              "values": [
+                23.572167,
+                4.787459
+              ],
+              "samples": [
+                [],
+                []
+              ]
+            }
+          ],
+          "note": "Separate instrumented pass: median of 15 requests per condition."
+        },
+        {
+          "title": "Diagnostic: DB dispatches",
+          "unit": "dispatches per POST",
+          "legend": [
+            "Sequential INSERT",
+            "Transactional COPY"
+          ],
+          "rows": [
+            {
+              "label": "POST 500 x 10 KB",
+              "values": [
+                500,
+                3
+              ],
+              "samples": [
+                [],
+                []
+              ],
+              "source_refs": [
+                {
+                  "path": "measurements/bulk-post-validation/20261004T033743Z-813debfb1f4a/diagnostic-before.json",
+                  "workload": "post-500-10kb",
+                  "property": "operations_per_request"
+                },
+                {
+                  "path": "measurements/bulk-post-validation/20261004T033743Z-813debfb1f4a/diagnostic-after.json",
+                  "workload": "post-500-10kb",
+                  "property": "operations_per_request"
+                }
+              ]
+            },
+            {
+              "label": "POST 50 x 100 KB",
+              "values": [
+                50,
+                3
+              ],
+              "samples": [
+                [],
+                []
+              ],
+              "source_refs": [
+                {
+                  "path": "measurements/bulk-post-validation/20261004T033743Z-813debfb1f4a/diagnostic-before.json",
+                  "workload": "post-50-100kb",
+                  "property": "operations_per_request"
+                },
+                {
+                  "path": "measurements/bulk-post-validation/20261004T033743Z-813debfb1f4a/diagnostic-after.json",
+                  "workload": "post-50-100kb",
+                  "property": "operations_per_request"
+                }
+              ]
+            }
+          ],
+          "note": "BEGIN + COPY + COMMIT after; excludes driver metadata setup, not packet counts."
+        },
+        {
+          "title": "Benchmark: POST median latency",
           "unit": "ms",
           "legend": [
             "Sequential INSERT",
@@ -639,7 +778,7 @@
           "note": "POST 500 improves clearly; POST 50 ranges overlap."
         },
         {
-          "title": "POST request mean",
+          "title": "Benchmark: POST mean latency",
           "unit": "ms",
           "legend": [
             "Sequential INSERT",
@@ -670,49 +809,255 @@
             }
           ],
           "note": "Means use all saved rounds. POST 50 mean regresses."
-        },
-        {
-          "title": "Database-write elapsed phase",
-          "unit": "ms",
-          "legend": [
-            "Sequential INSERT",
-            "Transactional COPY"
-          ],
-          "rows": [
-            {
-              "label": "POST 500 x 10 KB",
-              "values": [
-                226.620708,
-                12.645042
-              ],
-              "samples": [
-                [],
-                []
-              ]
-            },
-            {
-              "label": "POST 50 x 100 KB",
-              "values": [
-                23.572167,
-                4.787459
-              ],
-              "samples": [
-                [],
-                []
-              ]
-            }
-          ],
-          "note": "Separate instrumented pass: median of 15 requests per condition."
         }
-      ]
+      ],
+      "evidence_pairing": "Each panel compares the same metric, unit, workload and sampling method; CPU/memory/diagnostic/latency panels are separate."
     },
     {
       "id": "incremental-parser",
       "title": "Fourth improvement: Incremental POST parsing",
-      "scope": "3 original suites and 3 whole-test Memray captures per version; fresh paired controls.",
+      "scope": "Same classified groups at whole-test peak before/after; groups from each version's median capture.",
       "panels": [
         {
-          "title": "Whole-test tracked peak",
+          "title": "Memray groups: POST 500 x 10 KB",
+          "unit": "MiB live at whole-test peak",
+          "legend": [
+            "Pre-parser control",
+            "Incremental POST parsing"
+          ],
+          "rows": [
+            {
+              "label": "HTTP request body",
+              "values": [
+                16.477140426635742,
+                0
+              ],
+              "samples": [
+                [],
+                []
+              ],
+              "source_refs": [
+                {
+                  "path": "measurements/streaming-post/20261004T234931Z-153f2b97e2c0/allocation-groups.json",
+                  "version": "before",
+                  "workload": "test_create_batch_runs_500_10kb",
+                  "capture_source": "profiles/memory/20261004T234931Z-153f2b97e2c0-streaming-post-4-before/f0244f11504749728561c6b4802472f5-tests-benchmarks-test_run_performance.py-test_create_batch_runs_500_10kb.bin",
+                  "group": "HTTP request body"
+                },
+                {
+                  "path": "measurements/streaming-post/20261004T234931Z-153f2b97e2c0/allocation-groups.json",
+                  "version": "after",
+                  "workload": "test_create_batch_runs_500_10kb",
+                  "capture_source": "profiles/memory/20261004T234931Z-153f2b97e2c0-streaming-post-3-after/7231fb628fe54d0ab5b593865cc42c63-tests-benchmarks-test_run_performance.py-test_create_batch_runs_500_10kb.bin",
+                  "group": "HTTP request body"
+                }
+              ]
+            },
+            {
+              "label": "Decoded request JSON",
+              "values": [
+                21.67315673828125,
+                0
+              ],
+              "samples": [
+                [],
+                []
+              ],
+              "source_refs": [
+                {
+                  "path": "measurements/streaming-post/20261004T234931Z-153f2b97e2c0/allocation-groups.json",
+                  "version": "before",
+                  "workload": "test_create_batch_runs_500_10kb",
+                  "capture_source": "profiles/memory/20261004T234931Z-153f2b97e2c0-streaming-post-4-before/f0244f11504749728561c6b4802472f5-tests-benchmarks-test_run_performance.py-test_create_batch_runs_500_10kb.bin",
+                  "group": "Decoded request JSON"
+                },
+                {
+                  "path": "measurements/streaming-post/20261004T234931Z-153f2b97e2c0/allocation-groups.json",
+                  "version": "after",
+                  "workload": "test_create_batch_runs_500_10kb",
+                  "capture_source": "profiles/memory/20261004T234931Z-153f2b97e2c0-streaming-post-3-after/7231fb628fe54d0ab5b593865cc42c63-tests-benchmarks-test_run_performance.py-test_create_batch_runs_500_10kb.bin",
+                  "group": "Decoded request JSON"
+                }
+              ]
+            },
+            {
+              "label": "Model validation",
+              "values": [
+                9.673004150390625,
+                0
+              ],
+              "samples": [
+                [],
+                []
+              ],
+              "source_refs": [
+                {
+                  "path": "measurements/streaming-post/20261004T234931Z-153f2b97e2c0/allocation-groups.json",
+                  "version": "before",
+                  "workload": "test_create_batch_runs_500_10kb",
+                  "capture_source": "profiles/memory/20261004T234931Z-153f2b97e2c0-streaming-post-4-before/f0244f11504749728561c6b4802472f5-tests-benchmarks-test_run_performance.py-test_create_batch_runs_500_10kb.bin",
+                  "group": "Model validation"
+                },
+                {
+                  "path": "measurements/streaming-post/20261004T234931Z-153f2b97e2c0/allocation-groups.json",
+                  "version": "after",
+                  "workload": "test_create_batch_runs_500_10kb",
+                  "capture_source": "profiles/memory/20261004T234931Z-153f2b97e2c0-streaming-post-3-after/7231fb628fe54d0ab5b593865cc42c63-tests-benchmarks-test_run_performance.py-test_create_batch_runs_500_10kb.bin",
+                  "group": "Model validation"
+                }
+              ]
+            },
+            {
+              "label": "Batch buffer",
+              "values": [
+                16.49812126159668,
+                18.300540924072266
+              ],
+              "samples": [
+                [],
+                []
+              ],
+              "source_refs": [
+                {
+                  "path": "measurements/streaming-post/20261004T234931Z-153f2b97e2c0/allocation-groups.json",
+                  "version": "before",
+                  "workload": "test_create_batch_runs_500_10kb",
+                  "capture_source": "profiles/memory/20261004T234931Z-153f2b97e2c0-streaming-post-4-before/f0244f11504749728561c6b4802472f5-tests-benchmarks-test_run_performance.py-test_create_batch_runs_500_10kb.bin",
+                  "group": "Batch buffer"
+                },
+                {
+                  "path": "measurements/streaming-post/20261004T234931Z-153f2b97e2c0/allocation-groups.json",
+                  "version": "after",
+                  "workload": "test_create_batch_runs_500_10kb",
+                  "capture_source": "profiles/memory/20261004T234931Z-153f2b97e2c0-streaming-post-3-after/7231fb628fe54d0ab5b593865cc42c63-tests-benchmarks-test_run_performance.py-test_create_batch_runs_500_10kb.bin",
+                  "group": "Batch buffer"
+                }
+              ]
+            }
+          ],
+          "note": "Zero: no classified live bytes at this peak; not zero allocations over the request."
+        },
+        {
+          "title": "Memray groups: POST 50 x 100 KB",
+          "unit": "MiB live at whole-test peak",
+          "legend": [
+            "Pre-parser control",
+            "Incremental POST parsing"
+          ],
+          "rows": [
+            {
+              "label": "HTTP request body",
+              "values": [
+                16.547521591186523,
+                0
+              ],
+              "samples": [
+                [],
+                []
+              ],
+              "source_refs": [
+                {
+                  "path": "measurements/streaming-post/20261004T234931Z-153f2b97e2c0/allocation-groups.json",
+                  "version": "before",
+                  "workload": "test_create_batch_runs_50_100kb",
+                  "capture_source": "profiles/memory/20261004T234931Z-153f2b97e2c0-streaming-post-4-before/f0244f11504749728561c6b4802472f5-tests-benchmarks-test_run_performance.py-test_create_batch_runs_50_100kb.bin",
+                  "group": "HTTP request body"
+                },
+                {
+                  "path": "measurements/streaming-post/20261004T234931Z-153f2b97e2c0/allocation-groups.json",
+                  "version": "after",
+                  "workload": "test_create_batch_runs_50_100kb",
+                  "capture_source": "profiles/memory/20261004T234931Z-153f2b97e2c0-streaming-post-3-after/7231fb628fe54d0ab5b593865cc42c63-tests-benchmarks-test_run_performance.py-test_create_batch_runs_50_100kb.bin",
+                  "group": "HTTP request body"
+                }
+              ]
+            },
+            {
+              "label": "Decoded request JSON",
+              "values": [
+                25.714752197265625,
+                1
+              ],
+              "samples": [
+                [],
+                []
+              ],
+              "source_refs": [
+                {
+                  "path": "measurements/streaming-post/20261004T234931Z-153f2b97e2c0/allocation-groups.json",
+                  "version": "before",
+                  "workload": "test_create_batch_runs_50_100kb",
+                  "capture_source": "profiles/memory/20261004T234931Z-153f2b97e2c0-streaming-post-4-before/f0244f11504749728561c6b4802472f5-tests-benchmarks-test_run_performance.py-test_create_batch_runs_50_100kb.bin",
+                  "group": "Decoded request JSON"
+                },
+                {
+                  "path": "measurements/streaming-post/20261004T234931Z-153f2b97e2c0/allocation-groups.json",
+                  "version": "after",
+                  "workload": "test_create_batch_runs_50_100kb",
+                  "capture_source": "profiles/memory/20261004T234931Z-153f2b97e2c0-streaming-post-3-after/7231fb628fe54d0ab5b593865cc42c63-tests-benchmarks-test_run_performance.py-test_create_batch_runs_50_100kb.bin",
+                  "group": "Decoded request JSON"
+                }
+              ]
+            },
+            {
+              "label": "Model validation",
+              "values": [
+                3.714752197265625,
+                0
+              ],
+              "samples": [
+                [],
+                []
+              ],
+              "source_refs": [
+                {
+                  "path": "measurements/streaming-post/20261004T234931Z-153f2b97e2c0/allocation-groups.json",
+                  "version": "before",
+                  "workload": "test_create_batch_runs_50_100kb",
+                  "capture_source": "profiles/memory/20261004T234931Z-153f2b97e2c0-streaming-post-4-before/f0244f11504749728561c6b4802472f5-tests-benchmarks-test_run_performance.py-test_create_batch_runs_50_100kb.bin",
+                  "group": "Model validation"
+                },
+                {
+                  "path": "measurements/streaming-post/20261004T234931Z-153f2b97e2c0/allocation-groups.json",
+                  "version": "after",
+                  "workload": "test_create_batch_runs_50_100kb",
+                  "capture_source": "profiles/memory/20261004T234931Z-153f2b97e2c0-streaming-post-3-after/7231fb628fe54d0ab5b593865cc42c63-tests-benchmarks-test_run_performance.py-test_create_batch_runs_50_100kb.bin",
+                  "group": "Model validation"
+                }
+              ]
+            },
+            {
+              "label": "Batch buffer",
+              "values": [
+                16.549619674682617,
+                16.549619674682617
+              ],
+              "samples": [
+                [],
+                []
+              ],
+              "source_refs": [
+                {
+                  "path": "measurements/streaming-post/20261004T234931Z-153f2b97e2c0/allocation-groups.json",
+                  "version": "before",
+                  "workload": "test_create_batch_runs_50_100kb",
+                  "capture_source": "profiles/memory/20261004T234931Z-153f2b97e2c0-streaming-post-4-before/f0244f11504749728561c6b4802472f5-tests-benchmarks-test_run_performance.py-test_create_batch_runs_50_100kb.bin",
+                  "group": "Batch buffer"
+                },
+                {
+                  "path": "measurements/streaming-post/20261004T234931Z-153f2b97e2c0/allocation-groups.json",
+                  "version": "after",
+                  "workload": "test_create_batch_runs_50_100kb",
+                  "capture_source": "profiles/memory/20261004T234931Z-153f2b97e2c0-streaming-post-3-after/7231fb628fe54d0ab5b593865cc42c63-tests-benchmarks-test_run_performance.py-test_create_batch_runs_50_100kb.bin",
+                  "group": "Batch buffer"
+                }
+              ]
+            }
+          ],
+          "note": "Zero: no classified live bytes at this peak; not zero allocations over the request."
+        },
+        {
+          "title": "Memray: whole-test tracked peak",
           "unit": "MiB",
           "legend": [
             "Pre-parser control",
@@ -745,7 +1090,7 @@
           "note": "These are tracked allocations, not production RAM."
         },
         {
-          "title": "POST request median",
+          "title": "Benchmark: POST median latency",
           "unit": "ms",
           "legend": [
             "Pre-parser control",
@@ -793,7 +1138,8 @@
           ],
           "note": "POST 50 rises about 31 ms (+10.4%); POST 500 is effectively unchanged."
         }
-      ]
+      ],
+      "evidence_pairing": "Each panel compares the same metric, unit, workload and sampling method; CPU/memory/diagnostic/latency panels are separate."
     },
     {
       "id": "worker-ram",
@@ -917,10 +1263,193 @@
     {
       "id": "read-ahead",
       "title": "Fifth improvement: Size-guided JSON read-ahead",
-      "scope": "3 original suites per version. Historical candidate also changed GET decoding, later reverted.",
+      "scope": "Yappi session-1 profiles before/after; all phases include SDK decoding. Benchmark latency is separate.",
       "panels": [
         {
-          "title": "POST request median",
+          "title": "CPU: raw_decode calls",
+          "unit": "calls",
+          "legend": [
+            "Incremental-parser control",
+            "Size-guided JSON read-ahead"
+          ],
+          "rows": [
+            {
+              "label": "POST 500 x 10 KB",
+              "values": [
+                572,
+                572
+              ],
+              "samples": [
+                [],
+                []
+              ],
+              "source_refs": [
+                {
+                  "path": "reports/interpretations/incremental-post-parsing.json",
+                  "source_id": "cpu-post-500-10kb-s1",
+                  "function": "JSONDecoder.raw_decode",
+                  "property": "calls"
+                },
+                {
+                  "path": "reports/interpretations/post-get-focus.json",
+                  "source_id": "cpu-post-500-10kb-s1",
+                  "function": "JSONDecoder.raw_decode",
+                  "property": "calls"
+                }
+              ]
+            },
+            {
+              "label": "POST 50 x 100 KB",
+              "values": [
+                123,
+                58
+              ],
+              "samples": [
+                [],
+                []
+              ],
+              "source_refs": [
+                {
+                  "path": "reports/interpretations/incremental-post-parsing.json",
+                  "source_id": "cpu-post-50-100kb-s1",
+                  "function": "JSONDecoder.raw_decode",
+                  "property": "calls"
+                },
+                {
+                  "path": "reports/interpretations/post-get-focus.json",
+                  "source_id": "cpu-post-50-100kb-s1",
+                  "function": "JSONDecoder.raw_decode",
+                  "property": "calls"
+                }
+              ]
+            }
+          ],
+          "note": "Same decoder function/capture scope; counts include SDK decoding."
+        },
+        {
+          "title": "CPU: raw_decode self time",
+          "unit": "CPU seconds (self)",
+          "legend": [
+            "Incremental-parser control",
+            "Size-guided JSON read-ahead"
+          ],
+          "rows": [
+            {
+              "label": "POST 500 x 10 KB",
+              "values": [
+                0.066495,
+                0.069533
+              ],
+              "samples": [
+                [],
+                []
+              ],
+              "source_refs": [
+                {
+                  "path": "reports/interpretations/incremental-post-parsing.json",
+                  "source_id": "cpu-post-500-10kb-s1",
+                  "function": "JSONDecoder.raw_decode",
+                  "property": "self_s"
+                },
+                {
+                  "path": "reports/interpretations/post-get-focus.json",
+                  "source_id": "cpu-post-500-10kb-s1",
+                  "function": "JSONDecoder.raw_decode",
+                  "property": "self_s"
+                }
+              ]
+            },
+            {
+              "label": "POST 50 x 100 KB",
+              "values": [
+                0.080644,
+                0.073476
+              ],
+              "samples": [
+                [],
+                []
+              ],
+              "source_refs": [
+                {
+                  "path": "reports/interpretations/incremental-post-parsing.json",
+                  "source_id": "cpu-post-50-100kb-s1",
+                  "function": "JSONDecoder.raw_decode",
+                  "property": "self_s"
+                },
+                {
+                  "path": "reports/interpretations/post-get-focus.json",
+                  "source_id": "cpu-post-50-100kb-s1",
+                  "function": "JSONDecoder.raw_decode",
+                  "property": "self_s"
+                }
+              ]
+            }
+          ],
+          "note": "POST 50 decoding CPU decreases; POST 500 does not improve."
+        },
+        {
+          "title": "CPU: JSONDecodeError calls",
+          "unit": "calls",
+          "legend": [
+            "Incremental-parser control",
+            "Size-guided JSON read-ahead"
+          ],
+          "rows": [
+            {
+              "label": "POST 500 x 10 KB",
+              "values": [
+                65,
+                65
+              ],
+              "samples": [
+                [],
+                []
+              ],
+              "source_refs": [
+                {
+                  "path": "reports/interpretations/incremental-post-parsing.json",
+                  "source_id": "cpu-post-500-10kb-s1",
+                  "function": "JSONDecodeError.__init__",
+                  "property": "calls"
+                },
+                {
+                  "path": "reports/interpretations/post-get-focus.json",
+                  "source_id": "cpu-post-500-10kb-s1",
+                  "function": "JSONDecodeError.__init__",
+                  "property": "calls"
+                }
+              ]
+            },
+            {
+              "label": "POST 50 x 100 KB",
+              "values": [
+                66,
+                1
+              ],
+              "samples": [
+                [],
+                []
+              ],
+              "source_refs": [
+                {
+                  "path": "reports/interpretations/incremental-post-parsing.json",
+                  "source_id": "cpu-post-50-100kb-s1",
+                  "function": "JSONDecodeError.__init__",
+                  "property": "calls"
+                },
+                {
+                  "path": "reports/interpretations/post-get-focus.json",
+                  "source_id": "cpu-post-50-100kb-s1",
+                  "function": "JSONDecodeError.__init__",
+                  "property": "calls"
+                }
+              ]
+            }
+          ],
+          "note": "Counts include all phases; fewer large-run incomplete decode attempts."
+        },
+        {
+          "title": "Benchmark: POST median latency",
           "unit": "ms",
           "legend": [
             "Incremental-parser control",
@@ -966,9 +1495,10 @@
               ]
             }
           ],
-          "note": "POST 50 median -14.9%; POST 500 +4.7%. No uniform latency win."
+          "note": "Historical candidate also changed GET decoding, later reverted."
         }
-      ]
+      ],
+      "evidence_pairing": "Each panel compares the same metric, unit, workload and sampling method; CPU/memory/diagnostic/latency panels are separate."
     },
     {
       "id": "response-cleanup",
