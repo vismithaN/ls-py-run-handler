@@ -26,21 +26,31 @@ server: db-migrate
 
 # Format code using Ruff
 format:
-	poetry run ruff format ls_py_handler tests scripts
+	poetry run ruff format ls_py_handler tests
 
 # Lint code using Ruff
 lint:
-	poetry run ruff check ls_py_handler tests scripts
+	poetry run ruff check ls_py_handler tests
 
 # Automatically fix linting issues using Ruff
 lint-fix:
-	poetry run ruff check --fix ls_py_handler tests scripts
+	poetry run ruff check --fix ls_py_handler tests
 
 # Set up test environment (reset database and S3 bucket)
 test-setup:
-	docker-compose -f docker-compose-db.yaml exec -T db-postgres-15 psql -U postgres -v ON_ERROR_STOP=1 -c "DROP DATABASE IF EXISTS postgres_test;" -c "CREATE DATABASE postgres_test;"
-	RUN_HANDLER_ENV=test poetry run python -m scripts.reset_test_bucket
-	$(MAKE) db-migrate-test
+	@echo "Setting up test environment..."
+	@echo "1. Dropping postgres_test database if it exists..."
+	-docker exec -it ls-py-run-handler-db-postgres-15-1 psql -U postgres -c "DROP DATABASE IF EXISTS postgres_test;"
+	@echo "2. Creating postgres_test database..."
+	docker exec -it ls-py-run-handler-db-postgres-15-1 psql -U postgres -c "CREATE DATABASE postgres_test;"
+	@echo "3. Configuring MinIO client..."
+	docker exec -it ls-py-run-handler-minio-1 mc alias set local http://localhost:9000 minioadmin1 minioadmin1
+	@echo "4. Clearing and recreating runs-test bucket..."
+	-docker exec -it ls-py-run-handler-minio-1 mc rb --force local/runs-test
+	docker exec -it ls-py-run-handler-minio-1 mc mb local/runs-test
+	@echo "5. Running migrations on test database..."
+	make db-migrate-test
+	@echo "Test environment setup complete!"
 
 # Run correctness tests with the test environment, excluding benchmarks
 test: test-setup
