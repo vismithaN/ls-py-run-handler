@@ -173,11 +173,19 @@ a:focus-visible { outline: 2px solid var(--series-3); outline-offset: 3px; }
 .profile-svg-axis-title { fill: var(--text); font: 12px system-ui, sans-serif; font-weight: 600; }
 .profile-svg-value { fill: var(--text); font: 11px system-ui, sans-serif; font-weight: 650; }
 .profile-svg-bar { fill: var(--bar-color); }
-.profile-stage-details h4 { margin: 18px 0 0; font-size: 13px; font-weight: 600; }
 .profile-explanation { display: flex; flex-wrap: wrap; gap: 6px 10px; margin-top: 14px; padding: 12px 14px; background: var(--performance-tint); border-radius: 8px; font-size: 13px; }
 .profile-detail-group { margin-top: 16px; border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; }
-.profile-stage-details { margin-top: 12px; padding: 10px 0 0 12px; border-top: 1px solid var(--line); }
-.profile-stage-details h4 { margin-top: 18px; }
+.profile-exact-tables { margin-top: 10px; min-width: 0; container-type: inline-size; }
+.profile-table-grid { display: grid; grid-template-columns: minmax(0, 1fr); gap: 10px; margin-top: 12px; align-items: start; }
+@container (min-width: 620px) {
+  .profile-table-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+.profile-table-card { min-width: 0; padding: 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); }
+.profile-table-card h4 { margin: 0 0 6px; font-size: 12px; font-weight: 600; }
+.profile-exact-tables .profile-table { font-size: 11px; line-height: 1.35; }
+.profile-exact-tables .profile-table th, .profile-exact-tables .profile-table td { padding: 5px 4px; }
+.profile-exact-tables .profile-source { margin-top: 6px; font-size: 11px; }
+.profile-table-card .profile-notes { margin-top: 8px; padding-top: 6px; font-size: 11px; }
 .profile-finding-list { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
 .profile-finding { position: relative; background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 16px; }
 .profile-finding > strong { display: block; padding-right: 80px; font-variant-numeric: tabular-nums; }

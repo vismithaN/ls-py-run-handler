@@ -151,13 +151,6 @@ function profileSection(title, description, id) {
   return section;
 }
 
-function profileNotes(title, paragraphs) {
-  const notes = html('details', 'profile-notes');
-  notes.append(html('summary', '', title));
-  paragraphs.forEach(text => notes.append(html('p', 'profile-scope', text)));
-  return notes;
-}
-
 function cpuSeconds(value) {
   return value > 0 && value < 0.001 ? '<0.001' : number(value, 3);
 }
@@ -389,7 +382,6 @@ function renderBaselineCpu(stage) {
   const section = profileSection('Baseline CPU', 'Cold phase medians and function details, with their interpretations in the same tables.', 'profile-cpu');
   const details = detailedCpuTables(stage);
   details.classList.add('profile-detail-group');
-  details.open = true;
   section.append(details);
   return section;
 }
@@ -417,8 +409,8 @@ function renderBaselineMemory(stage) {
   drivers.append(html('h3', '', 'POST 500 · payload allocations relevant to encoding'));
   drivers.append(profileTable('Baseline POST 500 encoding allocations', ['Allocation', 'MiB at peak', 'Interpretation'], allocations.map(item => [item.label, number(item.mib, 1), driverNotes[item.label]]), [1]));
   section.append(peaks, drivers);
-  const details = html('details', 'profile-detail-group');
-  details.append(html('summary', '', 'Exact baseline memory tables and source recordings'), detailedMemoryTables(stage));
+  const details = html('section', 'profile-detail-group');
+  details.append(html('h3', '', 'Exact baseline memory tables and source recordings'), detailedMemoryTables(stage));
   section.append(details);
   return section;
 }
@@ -496,22 +488,26 @@ function detailedCpuTables(stage) {
     'JSON decode': 'Smaller than batch searching.',
     'Response encoding': 'Not a priority from this profile.'
   };
-  const details = html('details', 'profile-stage-details');
-  details.append(html('summary', '', `${stage.title} · exact CPU tables`));
+  const details = html('section', 'profile-exact-tables');
+  details.setAttribute('aria-label', `${stage.title} exact CPU tables`);
   if (stage.cpu.phase_medians?.length) {
     const headers = ['Workload', 'Imports', 'Startup', 'First request', 'Total'];
     if (baseline) headers.push('Interpretation');
     details.append(profileTable(`${stage.title} cold CPU phase medians`, headers, stage.cpu.phase_medians.map(row => [row.label, cpuSeconds(row.imports_s), cpuSeconds(row.startup_s), cpuSeconds(row.first_request_s), cpuSeconds(row.total_s), ...(baseline ? [workloadNotes[row.id] || 'Recorded for reference.'] : [])]), [1, 2, 3, 4]));
     details.append(profileSource(stage, 'cold-cpu-summary', 'Open 12-capture summary'));
   }
+  const grid = html('div', 'profile-table-grid');
   stage.cpu.workloads.forEach(item => {
-    details.append(html('h4', '', item.label));
+    const card = html('article', 'profile-table-card');
+    card.append(html('h4', '', item.label));
     const annotate = baseline && item.id === 'post-500-10kb';
-    const headers = ['Function', 'Calls', 'Self CPU (s)', 'Inclusive CPU (s)'];
+    const headers = ['Function', 'Calls', 'Self (s)', 'Inclusive (s)'];
     if (annotate) headers.push('Interpretation');
-    details.append(profileTable(`${stage.title} ${item.label} CPU functions`, headers, item.functions.map(result => [result.label, number(result.calls, 0), cpuSeconds(result.self_s), cpuSeconds(result.inclusive_s), ...(annotate ? [hotspotNotes[result.label] || 'Recorded for reference.'] : [])]), [1, 2, 3]));
-    details.append(profileSource(stage, item.source_id, `Open ${item.label} CPU text`));
+    card.append(profileTable(`${stage.title} ${item.label} CPU functions`, headers, item.functions.map(result => [result.label, number(result.calls, 0), cpuSeconds(result.self_s), cpuSeconds(result.inclusive_s), ...(annotate ? [hotspotNotes[result.label] || 'Recorded for reference.'] : [])]), [1, 2, 3]));
+    card.append(profileSource(stage, item.source_id, `Open ${item.label} CPU text`));
+    grid.append(card);
   });
+  details.append(grid);
   return details;
 }
 
@@ -542,32 +538,36 @@ function renderCpuComparison(stages) {
     section.append(note);
   }
 
-  const details = html('details', 'profile-detail-group');
-  details.append(html('summary', '', 'Exact CPU tables and source reports'));
+  const details = html('section', 'profile-detail-group');
+  details.append(html('h3', '', 'Exact CPU tables and source reports'));
   details.append(detailedCpuTables(current));
-  section.append(details, profileNotes('How to read this CPU evidence', [stages.at(-1).cpu.reading_guide, stages.at(-1).cpu.scope, stages.at(-1).cpu.limitation]));
+  section.append(details);
   return section;
 }
 
 function detailedMemoryTables(stage) {
-  const details = html('details', 'profile-stage-details');
-  details.append(html('summary', '', `${stage.title} · exact memory tables`));
+  const details = html('section', 'profile-exact-tables');
+  details.setAttribute('aria-label', `${stage.title} exact memory tables`);
   details.append(html('p', 'profile-meta', 'Five largest groups at the recorded peak. Test data and GET seeding are included. No Python stack means attribution is unavailable.'));
+  const grid = html('div', 'profile-table-grid');
   stage.memory.workloads.forEach(item => {
-    details.append(html('h4', '', `${item.label} · ${number(item.peak_mib)} MiB peak`));
+    const card = html('article', 'profile-table-card');
+    card.append(html('h4', '', `${item.label} · ${number(item.peak_mib)} MiB peak`));
     const groups = [...item.allocations].sort((a, b) => b.mib - a.mib || a.label.localeCompare(b.label));
     const visible = groups.slice(0, 5);
     const smaller = groups.slice(5);
     if (smaller.length) visible.push({ label: `Remaining smaller groups (${smaller.length})`, mib: smaller.reduce((total, result) => total + result.mib, 0) });
     const rows = results => results.map(result => [result.label, number(result.mib), `${number(item.peak_mib ? result.mib / item.peak_mib * 100 : 0, 1)}%`]);
-    details.append(profileTable(`${stage.title} ${item.label} allocations`, ['Allocation group', 'MiB at peak', '% of peak'], rows(visible), [1, 2]));
+    card.append(profileTable(`${stage.title} ${item.label} allocations`, ['Allocation group', 'MiB at peak', '% of peak'], rows(visible), [1, 2]));
     if (smaller.length) {
       const remainder = html('details', 'profile-notes');
       remainder.append(html('summary', '', 'Show remaining smaller groups'), profileTable(`${stage.title} ${item.label} smaller allocations`, ['Allocation group', 'MiB at peak', '% of peak'], rows(smaller), [1, 2]));
-      details.append(remainder);
+      card.append(remainder);
     }
-    details.append(profileSource(stage, item.source_id, 'Download Memray recording'));
+    card.append(profileSource(stage, item.source_id, 'Download Memray recording'));
+    grid.append(card);
   });
+  details.append(grid);
   return details;
 }
 
@@ -592,10 +592,10 @@ function renderMemoryComparison(stages) {
   })).filter(row => row.values.every(Number.isFinite));
   section.append(comparisonChart('POST 500 · allocation drivers at peak', 'Recorded stack attribution · absent groups are zero at that peak, not necessarily absent throughout execution', stages, drivers, 'MiB', 1, { x: 'Allocation group', y: 'Allocation at peak (MiB)' }));
 
-  const details = html('details', 'profile-detail-group');
-  details.append(html('summary', '', 'Exact memory tables and source recordings'));
+  const details = html('section', 'profile-detail-group');
+  details.append(html('h3', '', 'Exact memory tables and source recordings'));
   details.append(detailedMemoryTables(stages.at(-1)));
-  section.append(details, profileNotes('How to read this memory evidence', [stages.at(-1).memory.scope, stages.at(-1).memory.reading_guide, stages.at(-1).memory.limitation]));
+  section.append(details);
   return section;
 }
 
