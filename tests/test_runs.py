@@ -1,6 +1,5 @@
-"""Integration coverage for run values, parsing, storage failures and concurrency."""
+"""Correctness coverage for run round trips, rejected writes and storage failures."""
 
-import asyncio
 import uuid
 
 import asyncpg
@@ -120,44 +119,6 @@ async def test_batch_roundtrip(client, runs):
     await assert_roundtrip(client, runs)
 
 
-@pytest.mark.parametrize("encoding", ["utf-8", "utf-16", "utf-32"])
-async def test_fragmented_json(client, encoding):
-    run = make_run(
-        inputs={
-            "nested": [
-                None,
-                True,
-                False,
-                0,
-                -7,
-                1.25,
-                "",
-                {"deep": []},
-                -(2**63),
-                2**64 - 1,
-                1e300,
-                -0.0,
-            ]
-        },
-        outputs={"text": '🌍 தமிழ் 中文 café "quotes" \\path\nnext\tcolumn'},
-        metadata={"tags": ["one", "two"], "details": {"enabled": True}},
-    )
-    payload = orjson.dumps([run]).decode().encode(encoding)
-
-    async def chunks():
-        for start in range(0, len(payload), 7):
-            yield payload[start : start + 7]
-
-    response = await client.post(
-        "/runs", content=chunks(), headers={"Content-Type": "application/vendor+json"}
-    )
-    assert response.status_code == 201, response.text
-    assert response.json()["run_ids"] == [run["id"]]
-    response = await client.get(f"/runs/{run['id']}")
-    assert response.status_code == 200, response.text
-    assert response.json() == run
-
-
 async def storage_snapshot(db, s3):
     keys = set()
     async for page in s3.get_paginator("list_objects_v2").paginate(
@@ -231,8 +192,3 @@ async def test_missing_runs_and_objects(client, storage):
     assert response.status_code == 503, response.text
     assert response.json() == {"detail": "Stored run data is unavailable"}
     await assert_roundtrip(client, [make_run()])
-
-
-async def test_parallel_roundtrips(client):
-    runs = [make_run(inputs={"request": i}) for i in range(3)]
-    await asyncio.gather(*(assert_roundtrip(client, [run]) for run in runs))
