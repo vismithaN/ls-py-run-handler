@@ -3,6 +3,12 @@
 Profile-guided changes reduced POST and GET latency while lowering tracked
 memory. The work stayed within the existing PostgreSQL/S3 storage design.
 
+[View the interactive dashboard](https://run-handler-dashboard.vercel.app/#profiles)
+(Vercel-protected). In Profiling, CPU and memory tables compare each improvement
+with the previous retained optimization; only the first compares with baseline.
+Benchmark shows the overall request-latency progression. Profiled CPU seconds
+and request latency are shown separately.
+
 ## Contents
 
 - [Results](#1-results)
