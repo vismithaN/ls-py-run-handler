@@ -52,16 +52,18 @@ test-setup:
 	make db-migrate-test
 	@echo "Test environment setup complete!"
 
-# Run tests with test environment
+# Run correctness tests with the test environment, excluding benchmarks
 test: test-setup
-	RUN_HANDLER_ENV=test poetry run pytest -s
+	RUN_HANDLER_ENV=test poetry run pytest tests --ignore=tests/benchmarks -s
 
 # Run performance benchmarks
 benchmark: test-setup
 	@echo "Running performance benchmarks..."
-	RUN_HANDLER_ENV=test poetry run pytest tests/benchmarks/test_run_performance.py -v --benchmark-save=baseline --benchmark-compare
+	RUN_HANDLER_ENV=test poetry run pytest tests/benchmarks/test_run_performance.py -v --benchmark-save=baseline --benchmark-save-data --benchmark-compare
 
-# Run memory profiling
+# Run memory profiling; retain each run in a unique output directory
 memprofile: test-setup
-	@echo "Running memory profiling..."
-	RUN_HANDLER_ENV=test poetry run pytest tests/benchmarks/test_run_performance.py -v --memray
+	@mkdir -p profiles/memory
+	@memory_profile_dir=$$(mktemp -d "profiles/memory/$$(date -u +%Y%m%dT%H%M%SZ)-XXXXXXXX") && \
+		echo "Saving memory profiles to $$memory_profile_dir" && \
+		RUN_HANDLER_ENV=test poetry run pytest tests/benchmarks/test_run_performance.py -v --memray --memray-bin-path="$$memory_profile_dir"

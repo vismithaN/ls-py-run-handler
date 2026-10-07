@@ -1,0 +1,264 @@
+{
+  "schema_version": 1,
+  "purpose": "Baseline versus the final submitted application, including runtime JSON request logging; three new unprofiled and Memray suites.",
+  "measurement_scope": {
+    "latency": "Original four pytest-benchmark workloads, in-process API requests; median of one baseline suite versus median of three final suite medians.",
+    "memory": "Original pytest-memray whole-test allocation high-watermarks; one baseline capture versus median of three final captures. Not server RSS.",
+    "cpu": "Historical Yappi CPU-clock measurements from the optimization experiments, before final request logging. Not a new profile of the submitted application or benchmark latency.",
+    "limitations": [
+      "Single original baseline suite; cumulative observations are not controlled causal estimates or production SLOs.",
+      "Unprofiled timing samples and compact profiler extracts are included in this submission.",
+      "Fresh final captures include runtime logging; differences from earlier final results do not isolate logging overhead."
+    ]
+  },
+  "measured_application_sha256": "9734f8aae539c71f667e25cd9f3da3ef1faeb4e6e0f6a1b4e666ee7562d927db",
+  "workloads": [
+    {
+      "id": "post-500-10kb",
+      "label": "POST 500 \u00d7 10 KB",
+      "before_median_ms": 2107.1943749998354,
+      "after_median_ms": 358.86537499027327,
+      "before_peak_mib": 191.40101718902588,
+      "after_peak_mib": 100.72051048278809,
+      "before_benchmark_medians_ms": [
+        2107.1943749998354
+      ],
+      "after_benchmark_medians_ms": [
+        374.59087499883026,
+        358.86537499027327,
+        321.0291249852162
+      ],
+      "after_peak_repeats_mib": [
+        100.72051048278809,
+        100.72051048278809,
+        100.72051048278809
+      ],
+      "latency_reduction_pct": 82.96951722878904,
+      "memory_reduction_pct": 47.37723343271607
+    },
+    {
+      "id": "post-50-100kb",
+      "label": "POST 50 \u00d7 100 KB",
+      "before_median_ms": 619.5012499997574,
+      "after_median_ms": 343.0922499974258,
+      "before_peak_mib": 132.3521022796631,
+      "after_peak_mib": 84.36569881439209,
+      "before_benchmark_medians_ms": [
+        619.5012499997574
+      ],
+      "after_benchmark_medians_ms": [
+        343.0922499974258,
+        333.75787499244325,
+        463.59849997679703
+      ],
+      "after_peak_repeats_mib": [
+        84.36569881439209,
+        84.36569881439209,
+        84.36569881439209
+      ],
+      "latency_reduction_pct": 44.6179890682125,
+      "memory_reduction_pct": 36.25662353581253
+    },
+    {
+      "id": "get-10kb",
+      "label": "GET 10 KB",
+      "before_median_ms": 88.15822899987324,
+      "after_median_ms": 43.13700000056997,
+      "before_peak_mib": 14.624557495117188,
+      "after_peak_mib": 9.214910507202148,
+      "before_benchmark_medians_ms": [
+        88.15822899987324
+      ],
+      "after_benchmark_medians_ms": [
+        43.13700000056997,
+        42.28133300784975,
+        43.616667011519894
+      ],
+      "after_peak_repeats_mib": [
+        9.214910507202148,
+        9.20563793182373,
+        9.22181510925293
+      ],
+      "latency_reduction_pct": 51.068663141325146,
+      "memory_reduction_pct": 36.990158435365984
+    },
+    {
+      "id": "get-100kb",
+      "label": "GET 100 KB",
+      "before_median_ms": 95.23764600021423,
+      "after_median_ms": 46.93218749889638,
+      "before_peak_mib": 7.125877380371094,
+      "after_peak_mib": 2.4122533798217773,
+      "before_benchmark_medians_ms": [
+        95.23764600021423
+      ],
+      "after_benchmark_medians_ms": [
+        55.6128335010726,
+        44.4213954906445,
+        46.93218749889638
+      ],
+      "after_peak_repeats_mib": [
+        2.41489315032959,
+        2.4122533798217773,
+        2.406142234802246
+      ],
+      "latency_reduction_pct": 50.72097067708833,
+      "memory_reduction_pct": 66.14798078807027
+    }
+  ],
+  "provenance": [
+    {
+      "path": "reports/benchmarks/baseline.json",
+      "sha256": "7b7cf1cb58b6d0ec93ad6f3d2b9ad8dcf9082f97af236f1056fea5ecee17cbd3",
+      "size_bytes": 7587
+    },
+    {
+      "path": "reports/benchmarks/final-1.json",
+      "sha256": "e6374e5ba4b0c4172db60de70f13f5ec5dcfd03e568b46a02eda74b434f1a7a2",
+      "size_bytes": 7913
+    },
+    {
+      "path": "reports/benchmarks/final-2.json",
+      "sha256": "d9edcfd1489b2b2a04a73a688ee7fbfea696aca4315cc50a5d9df0c4d987fa69",
+      "size_bytes": 8492
+    },
+    {
+      "path": "reports/benchmarks/final-3.json",
+      "sha256": "8c3cb47a183a8dc844417a2568d94fc50c62981c5849d5fb2e489c9804993b22",
+      "size_bytes": 8153
+    },
+    {
+      "path": "reports/profiles/baseline-memory.json",
+      "sha256": "6c2a18b51fca8e59242e688657e37d58cc95ae303943a7ace79424bc1974de9f",
+      "size_bytes": 1943
+    },
+    {
+      "path": "reports/profiles/final-memory.json",
+      "sha256": "10bd0dbd2105a6d8683089809c6316ab3d27efecad4044e0d3d20f7b315e22ce",
+      "size_bytes": 5360
+    },
+    {
+      "path": "reports/profiles/selected-cpu.json",
+      "sha256": "abc7654530e04946b514de694da7bca201cc8bf51a3be6e649d41ce3f5a389ae",
+      "size_bytes": 10794
+    }
+  ],
+  "measured_at_utc": "2026-10-05T21:46:33.440683+00:00",
+  "environment": {
+    "machine_info": {
+      "node": "Apples-MacBook-Air.local",
+      "processor": "arm",
+      "machine": "arm64",
+      "python_compiler": "Clang 15.0.0 (clang-1500.3.9.4)",
+      "python_implementation": "CPython",
+      "python_implementation_version": "3.11.9",
+      "python_version": "3.11.9",
+      "python_build": [
+        "main",
+        "Apr  2 2024 08:25:04"
+      ],
+      "release": "23.4.0",
+      "system": "Darwin",
+      "cpu": {
+        "python_version": "3.11.9.final.0 (64 bit)",
+        "cpuinfo_version": [
+          9,
+          0,
+          0
+        ],
+        "cpuinfo_version_string": "9.0.0",
+        "arch": "ARM_8",
+        "bits": 64,
+        "count": 8,
+        "arch_string_raw": "arm64",
+        "brand_raw": "Apple M1"
+      }
+    },
+    "pytest_benchmark_version": "5.1.0",
+    "memray_version": "1.17.2",
+    "storage": "PostgreSQL and MinIO in Docker; a disposable isolated database/bucket per suite; unchanged benchmark fixtures/options.",
+    "logging": "INFO-level application JSON request logs enabled throughout final measurements.",
+    "dependency_versions": {
+      "fastapi": "0.104.1",
+      "aiobotocore": "2.21.1",
+      "asyncpg": "0.30.0",
+      "orjson": "3.10.15",
+      "pydantic": "2.10.6",
+      "httpx": "0.25.2",
+      "pytest": "8.3.5",
+      "pytest-benchmark": "5.1.0",
+      "pytest-memray": "1.7.0",
+      "memray": "1.17.2"
+    }
+  },
+  "historical_cpu_phase_medians": {
+    "baseline": [
+      {
+        "id": "post-500-10kb",
+        "label": "POST 500 \u00d7 10 KB",
+        "total_s": 5.396897,
+        "imports_s": 3.38943,
+        "startup_s": 0.232473,
+        "first_request_s": 1.770919
+      },
+      {
+        "id": "post-50-100kb",
+        "label": "POST 50 \u00d7 100 KB",
+        "total_s": 4.516401,
+        "imports_s": 3.421856,
+        "startup_s": 0.23607,
+        "first_request_s": 0.77672
+      },
+      {
+        "id": "get-10kb",
+        "label": "GET 10 KB",
+        "total_s": 3.997455,
+        "imports_s": 3.416192,
+        "startup_s": 0.233585,
+        "first_request_s": 0.350064
+      },
+      {
+        "id": "get-100kb",
+        "label": "GET 100 KB",
+        "total_s": 4.083051,
+        "imports_s": 3.381254,
+        "startup_s": 0.237707,
+        "first_request_s": 0.471408
+      }
+    ],
+    "final_before_observability": [
+      {
+        "id": "post-500-10kb",
+        "label": "POST 500 \u00d7 10 KB",
+        "total_s": 4.105257,
+        "imports_s": 3.380665,
+        "startup_s": 0.238419,
+        "first_request_s": 0.485435
+      },
+      {
+        "id": "post-50-100kb",
+        "label": "POST 50 \u00d7 100 KB",
+        "total_s": 3.967357,
+        "imports_s": 3.334975,
+        "startup_s": 0.237537,
+        "first_request_s": 0.393141
+      },
+      {
+        "id": "get-10kb",
+        "label": "GET 10 KB",
+        "total_s": 3.781499,
+        "imports_s": 3.33965,
+        "startup_s": 0.243405,
+        "first_request_s": 0.183929
+      },
+      {
+        "id": "get-100kb",
+        "label": "GET 100 KB",
+        "total_s": 3.768717,
+        "imports_s": 3.34977,
+        "startup_s": 0.240101,
+        "first_request_s": 0.180862
+      }
+    ]
+  }
+}

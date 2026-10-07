@@ -1,0 +1,1322 @@
+{
+  "schema_version": 1,
+  "created_on": "2026-10-05",
+  "purpose": "Submission figures: historical matched experiments and freshly measured final application; saved measurements only.",
+  "repeat_definition": "Sample arrays contain independent suite medians or capture peaks used to calculate bar values.",
+  "sources": [
+    {
+      "path": "reports/benchmarks/baseline.json",
+      "sha256": "7b7cf1cb58b6d0ec93ad6f3d2b9ad8dcf9082f97af236f1056fea5ecee17cbd3",
+      "size_bytes": 7587
+    },
+    {
+      "path": "reports/benchmarks/final-1.json",
+      "sha256": "e6374e5ba4b0c4172db60de70f13f5ec5dcfd03e568b46a02eda74b434f1a7a2",
+      "size_bytes": 7913
+    },
+    {
+      "path": "reports/benchmarks/final-2.json",
+      "sha256": "d9edcfd1489b2b2a04a73a688ee7fbfea696aca4315cc50a5d9df0c4d987fa69",
+      "size_bytes": 8492
+    },
+    {
+      "path": "reports/benchmarks/final-3.json",
+      "sha256": "8c3cb47a183a8dc844417a2568d94fc50c62981c5849d5fb2e489c9804993b22",
+      "size_bytes": 8153
+    },
+    {
+      "path": "reports/profiles/baseline-memory.json",
+      "sha256": "6c2a18b51fca8e59242e688657e37d58cc95ae303943a7ace79424bc1974de9f",
+      "size_bytes": 1943
+    },
+    {
+      "path": "reports/profiles/final-memory.json",
+      "sha256": "10bd0dbd2105a6d8683089809c6316ab3d27efecad4044e0d3d20f7b315e22ce",
+      "size_bytes": 5360
+    },
+    {
+      "path": "reports/profiles/selected-cpu.json",
+      "sha256": "abc7654530e04946b514de694da7bca201cc8bf51a3be6e649d41ce3f5a389ae",
+      "size_bytes": 10794
+    }
+  ],
+  "figures": [
+    {
+      "id": "final-latency",
+      "title": "Optimization report: Latency",
+      "show_annotations": false,
+      "scope": "Original unprofiled benchmarks; one baseline suite versus median of three final suite medians with logging enabled.",
+      "panels": [
+        {
+          "title": "Request median latency",
+          "unit": "ms",
+          "legend": [
+            "Baseline",
+            "Final"
+          ],
+          "rows": [
+            {
+              "label": "POST 500 x 10 KB",
+              "values": [
+                2107.1943749998354,
+                358.86537499027327
+              ],
+              "samples": [
+                [
+                  2107.1943749998354
+                ],
+                [
+                  374.59087499883026,
+                  358.86537499027327,
+                  321.0291249852162
+                ]
+              ]
+            },
+            {
+              "label": "POST 50 x 100 KB",
+              "values": [
+                619.5012499997574,
+                343.0922499974258
+              ],
+              "samples": [
+                [
+                  619.5012499997574
+                ],
+                [
+                  343.0922499974258,
+                  333.75787499244325,
+                  463.59849997679703
+                ]
+              ]
+            },
+            {
+              "label": "GET 10 KB",
+              "values": [
+                88.15822899987324,
+                43.13700000056997
+              ],
+              "samples": [
+                [
+                  88.15822899987324
+                ],
+                [
+                  43.13700000056997,
+                  42.28133300784975,
+                  43.616667011519894
+                ]
+              ]
+            },
+            {
+              "label": "GET 100 KB",
+              "values": [
+                95.23764600021423,
+                46.93218749889638
+              ],
+              "samples": [
+                [
+                  95.23764600021423
+                ],
+                [
+                  55.6128335010726,
+                  44.4213954906445,
+                  46.93218749889638
+                ]
+              ]
+            }
+          ],
+          "note": "Same four supplied workloads; lower latency is better."
+        }
+      ],
+      "application_sha256": "9734f8aae539c71f667e25cd9f3da3ef1faeb4e6e0f6a1b4e666ee7562d927db"
+    },
+    {
+      "id": "final-memory",
+      "title": "Baseline to final: tracked allocations",
+      "scope": "Original whole-test Memray peaks; one baseline capture versus median of three final captures with logging enabled. Not server RSS.",
+      "panels": [
+        {
+          "title": "Peak tracked allocations",
+          "unit": "MiB",
+          "legend": [
+            "Baseline",
+            "Final"
+          ],
+          "rows": [
+            {
+              "label": "POST 500 x 10 KB",
+              "values": [
+                191.40101718902588,
+                100.72051048278809
+              ],
+              "samples": [
+                [
+                  191.40101718902588
+                ],
+                [
+                  100.72051048278809,
+                  100.72051048278809,
+                  100.72051048278809
+                ]
+              ]
+            },
+            {
+              "label": "POST 50 x 100 KB",
+              "values": [
+                132.3521022796631,
+                84.36569881439209
+              ],
+              "samples": [
+                [
+                  132.3521022796631
+                ],
+                [
+                  84.36569881439209,
+                  84.36569881439209,
+                  84.36569881439209
+                ]
+              ]
+            },
+            {
+              "label": "GET 10 KB",
+              "values": [
+                14.624557495117188,
+                9.214910507202148
+              ],
+              "samples": [
+                [
+                  14.624557495117188
+                ],
+                [
+                  9.214910507202148,
+                  9.20563793182373,
+                  9.22181510925293
+                ]
+              ]
+            },
+            {
+              "label": "GET 100 KB",
+              "values": [
+                7.125877380371094,
+                2.4122533798217773
+              ],
+              "samples": [
+                [
+                  7.125877380371094
+                ],
+                [
+                  2.41489315032959,
+                  2.4122533798217773,
+                  2.406142234802246
+                ]
+              ]
+            }
+          ],
+          "note": "Final bars are medians of three whole-test peaks. GET includes POST seeding."
+        }
+      ],
+      "application_sha256": "9734f8aae539c71f667e25cd9f3da3ef1faeb4e6e0f6a1b4e666ee7562d927db"
+    },
+    {
+      "id": "one-pass",
+      "title": "First improvement: One-pass batch encoding",
+      "scope": "Same Yappi function before/after; latency measured separately without a profiler.",
+      "panels": [
+        {
+          "title": "CPU: bytes.find self time",
+          "unit": "CPU seconds (self)",
+          "legend": [
+            "Baseline",
+            "One-pass batch encoding"
+          ],
+          "rows": [
+            {
+              "label": "POST 500 x 10 KB",
+              "values": [
+                1.034662,
+                0
+              ],
+              "samples": [
+                [],
+                []
+              ],
+              "source_refs": []
+            },
+            {
+              "label": "POST 50 x 100 KB",
+              "values": [
+                0.211245,
+                0
+              ],
+              "samples": [
+                [],
+                []
+              ],
+              "source_refs": []
+            }
+          ],
+          "note": ""
+        },
+        {
+          "title": "CPU: bytes.find calls",
+          "unit": "calls",
+          "legend": [
+            "Baseline",
+            "One-pass batch encoding"
+          ],
+          "rows": [
+            {
+              "label": "POST 500 x 10 KB",
+              "values": [
+                1500,
+                0
+              ],
+              "samples": [
+                [],
+                []
+              ]
+            },
+            {
+              "label": "POST 50 x 100 KB",
+              "values": [
+                150,
+                0
+              ],
+              "samples": [
+                [],
+                []
+              ]
+            }
+          ],
+          "note": "Offset recording removes bytes.find."
+        },
+        {
+          "title": "Benchmark: POST median latency",
+          "unit": "ms",
+          "legend": [
+            "Baseline",
+            "One-pass batch encoding"
+          ],
+          "rows": [
+            {
+              "label": "POST 500 x 10 KB",
+              "values": [
+                2107.1943749998354,
+                594.7655419877265
+              ],
+              "samples": [
+                [],
+                []
+              ]
+            },
+            {
+              "label": "POST 50 x 100 KB",
+              "values": [
+                619.5012499997574,
+                394.41983299911954
+              ],
+              "samples": [
+                [],
+                []
+              ]
+            }
+          ],
+          "note": ""
+        },
+        {
+          "title": "Memray: whole-test tracked peak",
+          "unit": "MiB",
+          "legend": [
+            "Baseline",
+            "One-pass batch encoding"
+          ],
+          "rows": [
+            {
+              "label": "POST 500 x 10 KB",
+              "values": [
+                191.40101718902588,
+                171.2413148880005
+              ],
+              "samples": [
+                [],
+                []
+              ]
+            },
+            {
+              "label": "POST 50 x 100 KB",
+              "values": [
+                132.3521022796631,
+                117.34284591674805
+              ],
+              "samples": [
+                [],
+                []
+              ]
+            }
+          ],
+          "note": ""
+        }
+      ],
+      "evidence_pairing": "Each panel compares the same metric, unit, workload and sampling method; CPU/memory/diagnostic/latency panels are separate."
+    },
+    {
+      "id": "session-reuse",
+      "title": "Second improvement: S3 SDK session reuse",
+      "caption": "Original benchmarks: three suites per version.",
+      "scope": "CPU: one cold capture per workload/version. Latency: median of 3 benchmark suite medians per version.",
+      "panels": [
+        {
+          "title": "GET CPU: get_s3_client",
+          "unit": "CPU seconds (inclusive)",
+          "legend": [
+            "Session reuse disabled",
+            "Session reuse enabled"
+          ],
+          "rows": [
+            {
+              "label": "GET 10 KB",
+              "values": [
+                0.164797,
+                0.032747
+              ],
+              "samples": [
+                [],
+                []
+              ]
+            },
+            {
+              "label": "GET 100 KB",
+              "values": [
+                0.162442,
+                0.032676
+              ],
+              "samples": [
+                [],
+                []
+              ]
+            }
+          ],
+          "note": "Cold CPU profiles: same function before/after, including callees."
+        },
+        {
+          "title": "POST CPU: get_s3_client",
+          "unit": "CPU seconds (inclusive)",
+          "legend": [
+            "Session reuse disabled",
+            "Session reuse enabled"
+          ],
+          "rows": [
+            {
+              "label": "POST 500 x 10 KB",
+              "values": [
+                0.16657,
+                0.032299
+              ],
+              "samples": [
+                [],
+                []
+              ]
+            },
+            {
+              "label": "POST 50 x 100 KB",
+              "values": [
+                0.161998,
+                0.033313
+              ],
+              "samples": [
+                [],
+                []
+              ]
+            }
+          ],
+          "note": "Cold CPU profiles: same function before/after, including callees."
+        },
+        {
+          "title": "GET request median",
+          "unit": "ms",
+          "legend": [
+            "Session reuse disabled",
+            "Session reuse enabled"
+          ],
+          "rows": [
+            {
+              "label": "GET 10 KB",
+              "values": [
+                87.82258399878629,
+                41.112124992650934
+              ],
+              "samples": [
+                [
+                  87.82258399878629,
+                  85.96614549605874,
+                  88.74870900763199
+                ],
+                [
+                  40.376124990871176,
+                  42.79920900444267,
+                  41.112124992650934
+                ]
+              ]
+            },
+            {
+              "label": "GET 100 KB",
+              "values": [
+                91.42787499877159,
+                47.51841699908255
+              ],
+              "samples": [
+                [
+                  90.74891599448165,
+                  91.42787499877159,
+                  91.61624999978812
+                ],
+                [
+                  48.633875005180016,
+                  47.0260625006631,
+                  47.51841699908255
+                ]
+              ]
+            }
+          ],
+          "note": ""
+        },
+        {
+          "title": "POST request median",
+          "unit": "ms",
+          "legend": [
+            "Session reuse disabled",
+            "Session reuse enabled"
+          ],
+          "rows": [
+            {
+              "label": "POST 500 x 10 KB",
+              "values": [
+                590.674624996609,
+                554.2386669985717
+              ],
+              "samples": [
+                [
+                  613.3879999979399,
+                  590.674624996609,
+                  577.4474579957314
+                ],
+                [
+                  527.1120419929503,
+                  554.2386669985717,
+                  579.4624999980442
+                ]
+              ]
+            },
+            {
+              "label": "POST 50 x 100 KB",
+              "values": [
+                380.09716699889395,
+                348.6515839904314
+              ],
+              "samples": [
+                [
+                  380.09716699889395,
+                  341.47820799262263,
+                  458.38341700437013
+                ],
+                [
+                  348.6515839904314,
+                  335.8252499892842,
+                  362.4529579974478
+                ]
+              ]
+            }
+          ],
+          "note": "POST repeats are noisier. Connections remain request-scoped."
+        }
+      ]
+    },
+    {
+      "id": "copy",
+      "title": "Third improvement: Transactional bulk PostgreSQL writes",
+      "scope": "Same DB phase/count diagnostics before/after; 3 unprofiled benchmark suites per version.",
+      "panels": [
+        {
+          "title": "Diagnostic: DB-write elapsed time",
+          "unit": "ms",
+          "legend": [
+            "Sequential INSERT",
+            "Transactional COPY"
+          ],
+          "rows": [
+            {
+              "label": "POST 500 x 10 KB",
+              "values": [
+                226.620708,
+                12.645042
+              ],
+              "samples": [
+                [],
+                []
+              ]
+            },
+            {
+              "label": "POST 50 x 100 KB",
+              "values": [
+                23.572167,
+                4.787459
+              ],
+              "samples": [
+                [],
+                []
+              ]
+            }
+          ],
+          "note": "Separate instrumented pass: median of 15 requests per condition."
+        },
+        {
+          "title": "Diagnostic: DB dispatches",
+          "unit": "dispatches per POST",
+          "legend": [
+            "Sequential INSERT",
+            "Transactional COPY"
+          ],
+          "rows": [
+            {
+              "label": "POST 500 x 10 KB",
+              "values": [
+                500,
+                3
+              ],
+              "samples": [
+                [],
+                []
+              ],
+              "source_refs": []
+            },
+            {
+              "label": "POST 50 x 100 KB",
+              "values": [
+                50,
+                3
+              ],
+              "samples": [
+                [],
+                []
+              ],
+              "source_refs": []
+            }
+          ],
+          "note": "BEGIN + COPY + COMMIT after; excludes driver metadata setup, not packet counts."
+        },
+        {
+          "title": "Benchmark: POST median latency",
+          "unit": "ms",
+          "legend": [
+            "Sequential INSERT",
+            "Transactional COPY"
+          ],
+          "rows": [
+            {
+              "label": "POST 500 x 10 KB",
+              "values": [
+                540.8804580074502,
+                321.28124999871943
+              ],
+              "samples": [
+                [
+                  540.8804580074502,
+                  555.8084160002181,
+                  526.0392079944722
+                ],
+                [
+                  340.7774169900222,
+                  321.28124999871943,
+                  309.88879199139774
+                ]
+              ]
+            },
+            {
+              "label": "POST 50 x 100 KB",
+              "values": [
+                342.13416698912624,
+                309.6530419861665
+              ],
+              "samples": [
+                [
+                  342.13416698912624,
+                  380.09808299830183,
+                  322.1785829955479
+                ],
+                [
+                  309.6530419861665,
+                  324.79391699598636,
+                  289.3819169985363
+                ]
+              ]
+            }
+          ],
+          "note": "POST 500 improves clearly; POST 50 ranges overlap."
+        },
+        {
+          "title": "Benchmark: POST mean latency",
+          "unit": "ms",
+          "legend": [
+            "Sequential INSERT",
+            "Transactional COPY"
+          ],
+          "rows": [
+            {
+              "label": "POST 500 x 10 KB",
+              "values": [
+                550.7619833311765,
+                325.6820000009611
+              ],
+              "samples": [
+                [],
+                []
+              ]
+            },
+            {
+              "label": "POST 50 x 100 KB",
+              "values": [
+                348.00712480015744,
+                369.7408305335557
+              ],
+              "samples": [
+                [],
+                []
+              ]
+            }
+          ],
+          "note": "Means use all saved rounds. POST 50 mean regresses."
+        }
+      ],
+      "evidence_pairing": "Each panel compares the same metric, unit, workload and sampling method; CPU/memory/diagnostic/latency panels are separate."
+    },
+    {
+      "id": "incremental-parser",
+      "title": "Fourth improvement: Incremental POST parsing",
+      "scope": "Same classified groups at whole-test peak before/after; groups from each version's median capture.",
+      "panels": [
+        {
+          "title": "Memray groups: POST 500 x 10 KB",
+          "unit": "MiB live at whole-test peak",
+          "legend": [
+            "Pre-parser control",
+            "Incremental POST parsing"
+          ],
+          "rows": [
+            {
+              "label": "HTTP request body",
+              "values": [
+                16.477140426635742,
+                0
+              ],
+              "samples": [
+                [],
+                []
+              ],
+              "source_refs": []
+            },
+            {
+              "label": "Decoded request JSON",
+              "values": [
+                21.67315673828125,
+                0
+              ],
+              "samples": [
+                [],
+                []
+              ],
+              "source_refs": []
+            },
+            {
+              "label": "Model validation",
+              "values": [
+                9.673004150390625,
+                0
+              ],
+              "samples": [
+                [],
+                []
+              ],
+              "source_refs": []
+            },
+            {
+              "label": "Batch buffer",
+              "values": [
+                16.49812126159668,
+                18.300540924072266
+              ],
+              "samples": [
+                [],
+                []
+              ],
+              "source_refs": []
+            }
+          ],
+          "note": ""
+        },
+        {
+          "title": "Memray groups: POST 50 x 100 KB",
+          "unit": "MiB live at whole-test peak",
+          "legend": [
+            "Pre-parser control",
+            "Incremental POST parsing"
+          ],
+          "rows": [
+            {
+              "label": "HTTP request body",
+              "values": [
+                16.547521591186523,
+                0
+              ],
+              "samples": [
+                [],
+                []
+              ],
+              "source_refs": []
+            },
+            {
+              "label": "Decoded request JSON",
+              "values": [
+                25.714752197265625,
+                1
+              ],
+              "samples": [
+                [],
+                []
+              ],
+              "source_refs": []
+            },
+            {
+              "label": "Model validation",
+              "values": [
+                3.714752197265625,
+                0
+              ],
+              "samples": [
+                [],
+                []
+              ],
+              "source_refs": []
+            },
+            {
+              "label": "Batch buffer",
+              "values": [
+                16.549619674682617,
+                16.549619674682617
+              ],
+              "samples": [
+                [],
+                []
+              ],
+              "source_refs": []
+            }
+          ],
+          "note": ""
+        },
+        {
+          "title": "Memray: whole-test tracked peak",
+          "unit": "MiB",
+          "legend": [
+            "Pre-parser control",
+            "Incremental POST parsing"
+          ],
+          "rows": [
+            {
+              "label": "POST 500 x 10 KB",
+              "values": [
+                151.38204097747803,
+                100.72517967224121
+              ],
+              "samples": [
+                [],
+                []
+              ]
+            },
+            {
+              "label": "POST 50 x 100 KB",
+              "values": [
+                109.48644828796387,
+                84.35297298431396
+              ],
+              "samples": [
+                [],
+                []
+              ]
+            }
+          ],
+          "note": "These are tracked allocations, not production RAM."
+        },
+        {
+          "title": "Benchmark: POST median latency",
+          "unit": "ms",
+          "legend": [
+            "Pre-parser control",
+            "Incremental POST parsing"
+          ],
+          "rows": [
+            {
+              "label": "POST 500 x 10 KB",
+              "values": [
+                314.71529199916404,
+                313.84137501299847
+              ],
+              "samples": [
+                [
+                  314.55270799051505,
+                  321.1704170098528,
+                  314.71529199916404
+                ],
+                [
+                  316.52870899415575,
+                  313.84137501299847,
+                  299.97962499328423
+                ]
+              ]
+            },
+            {
+              "label": "POST 50 x 100 KB",
+              "values": [
+                297.9009999980917,
+                329.0116670104908
+              ],
+              "samples": [
+                [
+                  304.9341669975547,
+                  292.2489579941612,
+                  297.9009999980917
+                ],
+                [
+                  331.9174999924144,
+                  329.0116670104908,
+                  310.08929199015256
+                ]
+              ]
+            }
+          ],
+          "note": "POST 50 rises about 31 ms (+10.4%); POST 500 is effectively unchanged."
+        }
+      ],
+      "evidence_pairing": "Each panel compares the same metric, unit, workload and sampling method; CPU/memory/diagnostic/latency panels are separate."
+    },
+    {
+      "id": "worker-ram",
+      "title": "Fourth improvement: Incremental POST parsing \u2014 worker RAM",
+      "scope": "Linux/ARM64, 1 Uvicorn worker, 1 vCPU, 1 GiB, no swap or profiler; real HTTP.",
+      "panels": [
+        {
+          "title": "Absolute peak API-worker RSS",
+          "unit": "MiB",
+          "legend": [
+            "Baseline",
+            "Pre-parser control",
+            "Incremental POST parsing"
+          ],
+          "rows": [
+            {
+              "label": "POST 500 x 10 KB / 1 concurrent",
+              "values": [
+                192.9765625,
+                173.2890625,
+                112.46875
+              ],
+              "samples": [
+                [
+                  192.9765625,
+                  192.8046875,
+                  193.03125
+                ],
+                [
+                  173.2890625,
+                  172.94921875,
+                  173.546875
+                ],
+                [
+                  112.46875,
+                  103.98046875,
+                  117.6015625
+                ]
+              ]
+            },
+            {
+              "label": "POST 500 x 10 KB / 4 concurrent",
+              "values": [
+                456.73046875,
+                404.75,
+                204.390625
+              ],
+              "samples": [
+                [
+                  461.83984375,
+                  456.1640625,
+                  456.73046875
+                ],
+                [
+                  403.6484375,
+                  405.38671875,
+                  404.75
+                ],
+                [
+                  220.11328125,
+                  204.390625,
+                  203.8984375
+                ]
+              ]
+            },
+            {
+              "label": "POST 50 x 100 KB / 1 concurrent",
+              "values": [
+                189.87109375,
+                171.12890625,
+                101.5703125
+              ],
+              "samples": [
+                [
+                  189.85546875,
+                  189.87109375,
+                  190.24609375
+                ],
+                [
+                  171.12890625,
+                  171.046875,
+                  171.1484375
+                ],
+                [
+                  101.5703125,
+                  100.11328125,
+                  113.8359375
+                ]
+              ]
+            },
+            {
+              "label": "POST 50 x 100 KB / 4 concurrent",
+              "values": [
+                446.96484375,
+                400.4921875,
+                213.71484375
+              ],
+              "samples": [
+                [
+                  447.890625,
+                  446.96484375,
+                  444.63671875
+                ],
+                [
+                  400.4921875,
+                  401.859375,
+                  398.38671875
+                ],
+                [
+                  213.71484375,
+                  205.33984375,
+                  223.60546875
+                ]
+              ]
+            }
+          ],
+          "note": "Median of 3 fresh workers per condition. Not a new RSS measurement of the final implementation."
+        }
+      ]
+    },
+    {
+      "id": "read-ahead",
+      "title": "Fifth improvement: Size-guided JSON read-ahead",
+      "scope": "Yappi profiles before/after; all phases include SDK decoding. Benchmark latency is separate.",
+      "panels": [
+        {
+          "title": "CPU: raw_decode calls",
+          "unit": "calls",
+          "legend": [
+            "Incremental-parser control",
+            "Size-guided JSON read-ahead"
+          ],
+          "rows": [
+            {
+              "label": "POST 500 x 10 KB",
+              "values": [
+                572,
+                572
+              ],
+              "samples": [
+                [],
+                []
+              ],
+              "source_refs": []
+            },
+            {
+              "label": "POST 50 x 100 KB",
+              "values": [
+                123,
+                58
+              ],
+              "samples": [
+                [],
+                []
+              ],
+              "source_refs": []
+            }
+          ],
+          "note": "Same decoder function/capture scope; counts include SDK decoding."
+        },
+        {
+          "title": "CPU: raw_decode self time",
+          "unit": "CPU seconds (self)",
+          "legend": [
+            "Incremental-parser control",
+            "Size-guided JSON read-ahead"
+          ],
+          "rows": [
+            {
+              "label": "POST 500 x 10 KB",
+              "values": [
+                0.066495,
+                0.069533
+              ],
+              "samples": [
+                [],
+                []
+              ],
+              "source_refs": []
+            },
+            {
+              "label": "POST 50 x 100 KB",
+              "values": [
+                0.080644,
+                0.073476
+              ],
+              "samples": [
+                [],
+                []
+              ],
+              "source_refs": []
+            }
+          ],
+          "note": "POST 50 decoding CPU decreases; POST 500 does not improve."
+        },
+        {
+          "title": "CPU: JSONDecodeError calls",
+          "unit": "calls",
+          "legend": [
+            "Incremental-parser control",
+            "Size-guided JSON read-ahead"
+          ],
+          "rows": [
+            {
+              "label": "POST 500 x 10 KB",
+              "values": [
+                65,
+                65
+              ],
+              "samples": [
+                [],
+                []
+              ],
+              "source_refs": []
+            },
+            {
+              "label": "POST 50 x 100 KB",
+              "values": [
+                66,
+                1
+              ],
+              "samples": [
+                [],
+                []
+              ],
+              "source_refs": []
+            }
+          ],
+          "note": ""
+        },
+        {
+          "title": "Benchmark: POST median latency",
+          "unit": "ms",
+          "legend": [
+            "Incremental-parser control",
+            "Size-guided JSON read-ahead"
+          ],
+          "rows": [
+            {
+              "label": "POST 500 x 10 KB",
+              "values": [
+                333.09850000659935,
+                348.8179589912761
+              ],
+              "samples": [
+                [
+                  320.09733299491927,
+                  333.09850000659935,
+                  369.7819169901777
+                ],
+                [
+                  315.1282500184607,
+                  361.21137501322664,
+                  348.8179589912761
+                ]
+              ]
+            },
+            {
+              "label": "POST 50 x 100 KB",
+              "values": [
+                365.6286250043195,
+                310.9833750058897
+              ],
+              "samples": [
+                [
+                  397.67087501240894,
+                  365.6286250043195,
+                  323.0192920018453
+                ],
+                [
+                  367.1934580197558,
+                  303.2696250011213,
+                  310.9833750058897
+                ]
+              ]
+            }
+          ],
+          "note": ""
+        }
+      ],
+      "evidence_pairing": "Each panel compares the same metric, unit, workload and sampling method; CPU/memory/diagnostic/latency panels are separate."
+    },
+    {
+      "id": "response-cleanup",
+      "title": "Direct GET response encoding: cleanup",
+      "scope": "3 original suites per version. Storage reads and POST code were unchanged.",
+      "panels": [
+        {
+          "title": "GET request median",
+          "unit": "ms",
+          "legend": [
+            "Default response conversion",
+            "Direct ORJSONResponse"
+          ],
+          "rows": [
+            {
+              "label": "GET 10 KB",
+              "values": [
+                40.8915000007255,
+                41.01841700321529
+              ],
+              "samples": [
+                [
+                  40.8915000007255,
+                  41.17870799382217,
+                  40.49883301195223
+                ],
+                [
+                  41.01841700321529,
+                  38.575792001211084,
+                  41.065292003622744
+                ]
+              ]
+            },
+            {
+              "label": "GET 100 KB",
+              "values": [
+                46.629812502942514,
+                41.70666600111872
+              ],
+              "samples": [
+                [
+                  46.629812502942514,
+                  46.54149999259971,
+                  47.94675050652586
+                ],
+                [
+                  41.595250004320405,
+                  42.16024999914225,
+                  41.70666600111872
+                ]
+              ]
+            }
+          ],
+          "note": "GET 100 KB: 10.6% lower; GET 10 KB: effectively unchanged."
+        },
+        {
+          "title": "Recursive conversion calls",
+          "unit": "calls",
+          "legend": [
+            "Default response conversion",
+            "Direct ORJSONResponse"
+          ],
+          "rows": [
+            {
+              "label": "GET 10 KB",
+              "values": [
+                631,
+                0
+              ],
+              "samples": [
+                [],
+                []
+              ]
+            },
+            {
+              "label": "GET 100 KB",
+              "values": [
+                6157,
+                0
+              ],
+              "samples": [
+                [],
+                []
+              ]
+            }
+          ],
+          "note": "Call counts reproduced before/after; the JSON response is still encoded once."
+        }
+      ]
+    },
+    {
+      "id": "s3-read-count",
+      "title": "Single-range GET reads: request consolidation",
+      "scope": "Separate count diagnostics. This retained code change is excluded from optimization scorecards.",
+      "panels": [
+        {
+          "title": "Operations / new S3 connections per GET",
+          "unit": "count",
+          "legend": [
+            "Three concurrent field reads",
+            "One combined range"
+          ],
+          "rows": [
+            {
+              "label": "S3 GET requests",
+              "values": [
+                3,
+                1
+              ],
+              "samples": [
+                [],
+                []
+              ]
+            },
+            {
+              "label": "Observed new S3 TCP connections",
+              "values": [
+                3,
+                1
+              ],
+              "samples": [
+                [],
+                []
+              ]
+            },
+            {
+              "label": "JSON field decodes",
+              "values": [
+                3,
+                3
+              ],
+              "samples": [
+                [],
+                []
+              ]
+            }
+          ],
+          "note": "Both GET sizes; POST remains 1 PUT. Combined ranges include 23 extra bytes."
+        }
+      ]
+    }
+  ],
+  "source_availability": "Final timing reports and compact Memray/Yappi results are included under reports/benchmarks and reports/profiles. The figures retain the exact historical experiment values and repeat samples."
+}
